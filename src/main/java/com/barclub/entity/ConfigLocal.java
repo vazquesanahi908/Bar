@@ -79,6 +79,13 @@ public class ConfigLocal {
     @Builder.Default
     private String heroPos = "center";
 
+    // Apariencia: color de acento (#rrggbb) y modo (dark/light). Viven en el servidor
+    // para que la página pública los muestre a cualquier cliente, no solo en el navegador del admin.
+    private String temaAccent;
+
+    @Builder.Default
+    private String temaMode = "dark";
+
     // Momento del último cierre de caja (ISO datetime). Vacío = nunca se cerró.
     private String cierreCaja;
 
