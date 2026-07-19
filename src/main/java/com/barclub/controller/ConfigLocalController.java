@@ -7,6 +7,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -21,7 +23,20 @@ public class ConfigLocalController {
     @Operation(summary = "Obtener configuración del local", description = "Devuelve nombre, horarios, dirección, redes sociales y opciones de delivery.")
     @ApiResponse(responseCode = "200", description = "Configuración actual del local")
     public ResponseEntity<ConfigLocal> obtener() {
-        return ResponseEntity.ok(service.obtener());
+        ConfigLocal cfg = service.obtener();
+        // La página pública necesita esta configuración, pero la lista de emails
+        // del personal no debe salir al público: sería una lista de usuarios
+        // válidos para intentar adivinar contraseñas. Solo va a quien está logueado.
+        if (!estaAutenticado()) {
+            cfg = cfg.toBuilder().loginEmails("[]").build();
+        }
+        return ResponseEntity.ok(cfg);
+    }
+
+    private boolean estaAutenticado() {
+        Authentication a = SecurityContextHolder.getContext().getAuthentication();
+        return a != null && a.isAuthenticated()
+                && !"anonymousUser".equals(String.valueOf(a.getPrincipal()));
     }
 
     @PutMapping

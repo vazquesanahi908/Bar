@@ -64,8 +64,24 @@ public class PedidoService {
                 dto.getTipo(), dto.getUsuarioId(), dto.getNombreCliente(),
                 dto.getDetalles() != null ? dto.getDetalles().size() : 0);
 
-        Usuario usuario = usuarioRepository.findById(dto.getUsuarioId())
-                .orElseThrow(() -> new ResourceNotFoundException("Usuario", dto.getUsuarioId()));
+        // Los pedidos de la página pública no pertenecen a ningún empleado, pero el
+        // sistema necesita asociarlos a un usuario. Si el indicado no existe (por
+        // ejemplo, si ese usuario fue eliminado), usamos cualquier admin disponible
+        // en lugar de rechazar el pedido: un cliente no debe quedarse sin pedir por
+        // un cambio interno de usuarios.
+        Usuario usuario = (dto.getUsuarioId() == null)
+                ? null
+                : usuarioRepository.findById(dto.getUsuarioId()).orElse(null);
+        if (usuario == null) {
+            usuario = usuarioRepository.findAll().stream()
+                    .filter(u -> u.getRol() == Rol.ADMIN)
+                    .findFirst()
+                    .orElseGet(() -> usuarioRepository.findAll().stream().findFirst()
+                            .orElseThrow(() -> new BusinessException(
+                                    "No hay usuarios cargados en el sistema")));
+            logger.warn("Pedido recibido con usuarioId={} inexistente. Se asigna a {}",
+                    dto.getUsuarioId(), usuario.getEmail());
+        }
 
         // El rol MOZO solo puede registrar pedidos de mesa (LOCAL)
         if (usuario.getRol() == Rol.MOZO && dto.getTipo() != TipoPedido.LOCAL) {
