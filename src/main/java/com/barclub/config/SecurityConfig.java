@@ -46,6 +46,40 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/usuarios/reset-password").permitAll()
                 // Swagger
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+
+                // ── SOLO ADMIN: administración del sistema ──────────────────
+                // Gestión de usuarios, configuración del local y backups.
+                .requestMatchers("/api/usuarios/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PUT,    "/api/config/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.POST,   "/api/config/**").hasRole("ADMIN")
+                .requestMatchers("/api/backups/**").hasRole("ADMIN")
+                // Borrar ventas es destructivo: solo el dueño.
+                .requestMatchers(HttpMethod.DELETE, "/api/ventas/**").hasRole("ADMIN")
+
+                // ── ADMIN y CAJERO: manejo de dinero ────────────────────────
+                // Cobrar, cerrar caja y consultar ventas e informes.
+                .requestMatchers("/api/ventas/**").hasAnyRole("ADMIN", "CAJERO")
+                .requestMatchers("/api/dashboard/**").hasAnyRole("ADMIN", "CAJERO")
+                .requestMatchers("/api/clientes/**").hasAnyRole("ADMIN", "CAJERO")
+                // Reservas: las gestionan admin y cajero.
+                .requestMatchers(HttpMethod.GET,    "/api/reservas/**").hasAnyRole("ADMIN", "CAJERO")
+                .requestMatchers(HttpMethod.PATCH,  "/api/reservas/**").hasAnyRole("ADMIN", "CAJERO")
+                .requestMatchers(HttpMethod.DELETE, "/api/reservas/**").hasAnyRole("ADMIN", "CAJERO")
+
+                // ── Menú: lo edita admin y cajero; todos pueden leerlo ──────
+                .requestMatchers(HttpMethod.POST,   "/api/productos/**").hasAnyRole("ADMIN", "CAJERO")
+                .requestMatchers(HttpMethod.PUT,    "/api/productos/**").hasAnyRole("ADMIN", "CAJERO")
+                .requestMatchers(HttpMethod.PATCH,  "/api/productos/**").hasAnyRole("ADMIN", "CAJERO")
+                .requestMatchers(HttpMethod.DELETE, "/api/productos/**").hasAnyRole("ADMIN", "CAJERO")
+
+                // ── Pedidos ────────────────────────────────────────────────
+                // Borrar pedidos es destructivo: admin y cajero.
+                .requestMatchers(HttpMethod.DELETE, "/api/pedidos/**").hasAnyRole("ADMIN", "CAJERO")
+                // Crear pedidos: también el mozo desde el salón.
+                .requestMatchers(HttpMethod.POST,   "/api/pedidos/**").hasAnyRole("ADMIN", "CAJERO", "MOZO")
+                // Ver pedidos y cambiar su estado: los cuatro roles
+                // (cocina necesita marcar LISTO).
+
                 // ── Todo lo demás requiere JWT ──────────────────────────────
                 .anyRequest().authenticated()
             )
