@@ -213,7 +213,7 @@ public class PedidoService {
                 pedidoId, detalleDTO.getProductoId(), detalleDTO.getCantidad());
 
         pedido.getDetalles().stream()
-                .filter(d -> d.getProducto().getId().equals(producto.getId()))
+                .filter(d -> d.getProducto() != null && d.getProducto().getId().equals(producto.getId()))
                 .findFirst()
                 .ifPresentOrElse(
                         detalle -> {
@@ -280,7 +280,10 @@ public class PedidoService {
                         .cantidad(d.getCantidad())
                         .precioUnitario(d.getPrecioUnitario())
                         .subtotal(d.getSubtotal())
-                        .producto(productoService.toDTO(d.getProducto()))
+                        // Si el producto fue borrado del menú, el pedido histórico
+                        // igual tiene que poder verse (cantidad, precio y subtotal
+                        // quedaron guardados en el detalle).
+                        .producto(d.getProducto() != null ? productoService.toDTO(d.getProducto()) : null)
                         .build())
                 .collect(Collectors.toList());
 
