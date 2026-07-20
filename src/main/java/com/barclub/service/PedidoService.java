@@ -88,6 +88,18 @@ public class PedidoService {
             throw new BusinessException("El rol MOZO solo puede registrar pedidos de tipo LOCAL (mesa)");
         }
 
+        // Todo pedido tiene que poder identificarse a la hora de entregarlo.
+        // En retiro y delivery hace falta el nombre; en el local alcanza con la mesa.
+        boolean sinNombre = dto.getNombreCliente() == null || dto.getNombreCliente().isBlank();
+        boolean sinMesa   = dto.getMesa() == null || dto.getMesa().isBlank();
+        if (dto.getTipo() == TipoPedido.LOCAL) {
+            if (sinNombre && sinMesa) {
+                throw new BusinessException("Indicá la mesa o el nombre del cliente");
+            }
+        } else if (sinNombre) {
+            throw new BusinessException("El nombre del cliente es obligatorio");
+        }
+
         if (dto.getTipo() == TipoPedido.DELIVERY
                 && (dto.getDireccionEntrega() == null || dto.getDireccionEntrega().isBlank())) {
             logger.warn("PEDIDO RECHAZADO: delivery sin dirección de entrega. Usuario={}", dto.getUsuarioId());
@@ -168,8 +180,12 @@ public class PedidoService {
         if (pedido.getEstado() == EstadoPedido.CANCELADO) {
             throw new BusinessException("El pedido ya está cancelado");
         }
-        if (pedido.getEstado() != EstadoPedido.PENDIENTE) {
-            throw new BusinessException("Solo se pueden cancelar pedidos en estado PENDIENTE. Este pedido está en: " + pedido.getEstado());
+        // Se puede cancelar mientras no esté cobrado. Antes solo se permitía en
+        // PENDIENTE, y un pedido cargado por error quedaba trabado para siempre.
+        if (pedido.getEstado() != EstadoPedido.PENDIENTE
+                && pedido.getEstado() != EstadoPedido.PREPARACION
+                && pedido.getEstado() != EstadoPedido.LISTO) {
+            throw new BusinessException("No se puede cancelar un pedido en estado: " + pedido.getEstado());
         }
 
         LocalDateTime creacion = LocalDateTime.of(pedido.getFecha(), pedido.getHora());

@@ -3,6 +3,7 @@ package com.barclub.service;
 import com.barclub.dto.ProductoRequestDTO;
 import com.barclub.dto.ProductoResponseDTO;
 import com.barclub.entity.Producto;
+import com.barclub.exception.BusinessException;
 import com.barclub.exception.ResourceNotFoundException;
 import com.barclub.repository.ProductoRepository;
 import lombok.RequiredArgsConstructor;
@@ -106,7 +107,16 @@ public class ProductoService {
         if (!productoRepository.existsById(id)) {
             throw new ResourceNotFoundException("Producto", id);
         }
-        productoRepository.deleteById(id);
+        try {
+            productoRepository.deleteById(id);
+            productoRepository.flush();
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            // El producto figura en pedidos o ventas anteriores: borrarlo dejaría
+            // ese historial incompleto. Se desactiva en su lugar.
+            throw new BusinessException(
+                "Este producto ya fue pedido alguna vez, así que no se puede borrar "
+                + "sin perder el historial. Desactivalo para que deje de aparecer en la carta.");
+        }
     }
 
     // ---- Mapper entidad -> DTO ----

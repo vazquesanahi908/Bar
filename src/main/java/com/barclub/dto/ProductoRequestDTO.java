@@ -17,6 +17,7 @@ public class ProductoRequestDTO {
     @DecimalMin(value = "0.01", message = "El precio debe ser mayor a 0")
     private Double precio;
 
+    @DecimalMin(value = "0.0", message = "El costo no puede ser negativo")
     private Double costo;
 
     private Boolean activo = true;
