@@ -34,6 +34,11 @@ public class DetallePedido {
     @Column
     private Double costoUnitario;
 
+    // Variante elegida (ej: "Entera", "Media", "Fritas"). Se guarda para que la
+    // cocina sepa qué preparar y quede registrado en el historial.
+    @Column(length = 60)
+    private String variante;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "pedido_id", nullable = false)
     @ToString.Exclude

@@ -15,6 +15,7 @@ public class ProductoResponseDTO {
     private String descripcion;
     private Double precio;
     private Double costo;
+    private Double precioEntera;
     private Boolean activo;
     private String imagenUrl;
     private String categoria;

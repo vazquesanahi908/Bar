@@ -20,6 +20,10 @@ public class ProductoRequestDTO {
     @DecimalMin(value = "0.0", message = "El costo no puede ser negativo")
     private Double costo;
 
+    // Precio de la variante grande (pizza entera). Opcional.
+    @DecimalMin(value = "0.0", message = "El precio de la variante no puede ser negativo")
+    private Double precioEntera;
+
     private Boolean activo = true;
 
     private String imagenUrl;

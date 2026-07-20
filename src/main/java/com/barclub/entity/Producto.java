@@ -32,6 +32,11 @@ public class Producto {
     @Column
     private Double costo;
 
+    // Precio de la variante grande (ej: pizza entera). Si está vacío, el producto
+    // no tiene variantes y se cobra siempre el precio normal.
+    @Column
+    private Double precioEntera;
+
     @Column(nullable = false)
     @Builder.Default
     private Boolean activo = true;

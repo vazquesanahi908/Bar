@@ -71,6 +71,7 @@ public class ProductoService {
                 .descripcion(dto.getDescripcion())
                 .precio(dto.getPrecio())
                 .costo(dto.getCosto())
+                .precioEntera(dto.getPrecioEntera())
                 .activo(dto.getActivo() != null ? dto.getActivo() : true)
                 .imagenUrl(dto.getImagenUrl())
                 .categoria(dto.getCategoria())
@@ -87,6 +88,7 @@ public class ProductoService {
         producto.setDescripcion(dto.getDescripcion());
         producto.setPrecio(dto.getPrecio());
         producto.setCosto(dto.getCosto());
+        producto.setPrecioEntera(dto.getPrecioEntera());
         if (dto.getActivo() != null) producto.setActivo(dto.getActivo());
         if (dto.getImagenUrl() != null) producto.setImagenUrl(dto.getImagenUrl());
         producto.setCategoria(dto.getCategoria());
@@ -127,6 +129,7 @@ public class ProductoService {
                 .descripcion(p.getDescripcion())
                 .precio(p.getPrecio())
                 .costo(p.getCosto())
+                .precioEntera(p.getPrecioEntera())
                 .activo(p.getActivo())
                 .imagenUrl(p.getImagenUrl())
                 .categoria(p.getCategoria())

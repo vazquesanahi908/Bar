@@ -14,5 +14,6 @@ public class DetallePedidoResponseDTO {
     private Integer cantidad;
     private Double precioUnitario;
     private Double subtotal;
+    private String variante;
     private ProductoResponseDTO producto;
 }

@@ -139,13 +139,24 @@ public class PedidoService {
                 throw new BusinessException("El producto '" + producto.getNombre() + "' no está disponible");
             }
 
+            // Precio según la variante elegida. Si pidieron la grande (ej: pizza
+            // entera) y el producto tiene ese precio cargado, se cobra ese.
+            // El precio SIEMPRE sale de la base, nunca de lo que mande el cliente.
+            String variante = detalleDTO.getVariante();
+            boolean esGrande = variante != null && variante.trim().equalsIgnoreCase("Entera");
+            Double precioUnit = (esGrande && producto.getPrecioEntera() != null
+                                 && producto.getPrecioEntera() > 0)
+                    ? producto.getPrecioEntera()
+                    : producto.getPrecio();
+
             DetallePedido detalle = DetallePedido.builder()
                     .pedido(pedidoGuardado)
                     .producto(producto)
                     .cantidad(detalleDTO.getCantidad())
-                    .precioUnitario(producto.getPrecio())
+                    .variante(variante != null && !variante.isBlank() ? variante.trim() : null)
+                    .precioUnitario(precioUnit)
                     .costoUnitario(producto.getCosto())
-                    .subtotal(producto.getPrecio() * detalleDTO.getCantidad())
+                    .subtotal(precioUnit * detalleDTO.getCantidad())
                     .build();
 
             pedidoGuardado.getDetalles().add(detalle);
@@ -299,6 +310,7 @@ public class PedidoService {
                         // Si el producto fue borrado del menú, el pedido histórico
                         // igual tiene que poder verse (cantidad, precio y subtotal
                         // quedaron guardados en el detalle).
+                        .variante(d.getVariante())
                         .producto(d.getProducto() != null ? productoService.toDTO(d.getProducto()) : null)
                         .build())
                 .collect(Collectors.toList());
