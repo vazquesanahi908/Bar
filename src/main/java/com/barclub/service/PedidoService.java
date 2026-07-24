@@ -303,9 +303,17 @@ public class PedidoService {
 
     private void validarTransicionEstado(EstadoPedido actual, EstadoPedido nuevo) {
         boolean valido = switch (actual) {
-            case PENDIENTE -> nuevo == EstadoPedido.PREPARACION || nuevo == EstadoPedido.CANCELADO;
-            case PREPARACION -> nuevo == EstadoPedido.LISTO;
-            case LISTO -> nuevo == EstadoPedido.ENTREGADO;
+            // Se puede avanzar al paso siguiente, y también marcar ENTREGADO desde
+            // cualquier estado activo: cuando el cajero cobra, el pedido se entrega,
+            // sin importar si venía de pendiente, preparación o listo.
+            case PENDIENTE -> nuevo == EstadoPedido.PREPARACION
+                    || nuevo == EstadoPedido.ENTREGADO
+                    || nuevo == EstadoPedido.CANCELADO;
+            case PREPARACION -> nuevo == EstadoPedido.LISTO
+                    || nuevo == EstadoPedido.ENTREGADO
+                    || nuevo == EstadoPedido.CANCELADO;
+            case LISTO -> nuevo == EstadoPedido.ENTREGADO
+                    || nuevo == EstadoPedido.CANCELADO;
             case ENTREGADO, CANCELADO -> false;
         };
         if (!valido) {
