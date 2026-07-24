@@ -26,6 +26,9 @@ public interface PedidoRepository extends JpaRepository<Pedido, Long> {
     @Query("SELECT p FROM Pedido p WHERE p.estado NOT IN ('ENTREGADO', 'CANCELADO') ORDER BY p.fecha DESC, p.hora DESC")
     List<Pedido> findPedidosActivos();
 
+    @Query("SELECT p FROM Pedido p WHERE p.estado = 'ENTREGADO' AND p.entregadoEn >= :desde ORDER BY p.entregadoEn DESC")
+    List<Pedido> findEntregadosDesde(@org.springframework.data.repository.query.Param("desde") java.time.LocalDateTime desde);
+
     // Total de ventas del día
     @Query("SELECT COALESCE(SUM(p.total), 0) FROM Pedido p WHERE p.fecha = :fecha AND p.estado = 'ENTREGADO'")
     Double sumTotalByFecha(LocalDate fecha);

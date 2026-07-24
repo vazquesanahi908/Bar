@@ -37,6 +37,11 @@ public class PedidoController {
         return ResponseEntity.ok(pedidoService.listarTodos());
     }
 
+    @GetMapping("/entregados-desde-cierre")
+    public ResponseEntity<java.util.List<com.barclub.dto.PedidoResponseDTO>> entregadosDesdeCierre() {
+        return ResponseEntity.ok(pedidoService.entregadosDesdeCierre());
+    }
+
     @GetMapping("/activos")
     @Operation(summary = "Listar pedidos activos", description = "Devuelve pedidos en estado PENDIENTE, PREPARACION o LISTO.")
     @ApiResponse(responseCode = "200", description = "Lista de pedidos activos")

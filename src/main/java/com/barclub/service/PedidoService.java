@@ -30,6 +30,7 @@ public class PedidoService {
     private final UsuarioRepository usuarioRepository;
     private final VentaRepository ventaRepository;
     private final ProductoService productoService;
+    private final com.barclub.service.ConfigLocalService configLocalService;
     private final ClienteService clienteService;
     private final UsuarioService usuarioService;
 
@@ -169,6 +170,22 @@ public class PedidoService {
         return toDTO(resultado);
     }
 
+    // Pedidos entregados desde el último cierre de caja. Igual en todos los
+    // dispositivos, porque el filtro lo hace el servidor (no el navegador).
+    public List<PedidoResponseDTO> entregadosDesdeCierre() {
+        java.time.LocalDateTime desde;
+        try {
+            String c = configLocalService.obtener().getCierreCaja();
+            desde = (c == null || c.isBlank())
+                    ? java.time.LocalDate.now().atStartOfDay()
+                    : java.time.LocalDateTime.parse(c);
+        } catch (Exception e) {
+            desde = java.time.LocalDate.now().atStartOfDay();
+        }
+        return pedidoRepository.findEntregadosDesde(desde).stream()
+                .map(this::toDTO).collect(java.util.stream.Collectors.toList());
+    }
+
     public PedidoResponseDTO cambiarEstado(Long id, EstadoPedido nuevoEstado) {
         Pedido pedido = pedidoRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Pedido", id));
@@ -177,6 +194,9 @@ public class PedidoService {
         validarTransicionEstado(estadoAnterior, nuevoEstado);
 
         pedido.setEstado(nuevoEstado);
+        if (nuevoEstado == EstadoPedido.ENTREGADO && pedido.getEntregadoEn() == null) {
+            pedido.setEntregadoEn(java.time.LocalDateTime.now());
+        }
         logger.info("ESTADO PEDIDO: id={} -> {} -> {}", id, estadoAnterior, nuevoEstado);
         return toDTO(pedidoRepository.save(pedido));
     }

@@ -6,6 +6,7 @@ import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -32,6 +33,12 @@ public class Pedido {
     @Column(nullable = false)
     @Builder.Default
     private EstadoPedido estado = EstadoPedido.PENDIENTE;
+
+    // Momento exacto en que el pedido pasó a ENTREGADO. Sirve para mostrar en el
+    // tablero lo entregado desde el último cierre de caja, igual en todos los
+    // dispositivos (no depende del navegador).
+    @Column
+    private LocalDateTime entregadoEn;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
