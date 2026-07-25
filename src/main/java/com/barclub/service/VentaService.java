@@ -39,10 +39,13 @@ public class VentaService {
         Pedido pedido = pedidoRepository.findById(dto.getPedidoId())
                 .orElseThrow(() -> new ResourceNotFoundException("Pedido", dto.getPedidoId()));
 
-        // Solo se puede cobrar un pedido LISTO
-        if (pedido.getEstado() != EstadoPedido.LISTO) {
+        // Se puede cobrar cualquier pedido que no esté ya entregado o cancelado.
+        // Antes exigía estado LISTO, pero en la práctica el cajero cobra pedidos
+        // que siguen en preparación, y eso hacía fallar el cobro.
+        if (pedido.getEstado() == EstadoPedido.ENTREGADO
+                || pedido.getEstado() == EstadoPedido.CANCELADO) {
             throw new BusinessException(
-                "Solo se pueden registrar ventas de pedidos en estado LISTO. Estado actual: " + pedido.getEstado()
+                "No se puede cobrar un pedido que ya está " + pedido.getEstado()
             );
         }
 
@@ -60,8 +63,11 @@ public class VentaService {
                 .pedido(pedido)
                 .build();
 
-        // Marcar pedido como ENTREGADO
+        // Marcar pedido como ENTREGADO y sellar la hora de entrega
         pedido.setEstado(EstadoPedido.ENTREGADO);
+        if (pedido.getEntregadoEn() == null) {
+            pedido.setEntregadoEn(java.time.LocalDateTime.now());
+        }
         pedidoRepository.save(pedido);
 
         return toDTO(ventaRepository.save(venta));
