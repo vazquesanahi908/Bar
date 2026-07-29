@@ -145,10 +145,20 @@ public class PedidoService {
             // El precio SIEMPRE sale de la base, nunca de lo que mande el cliente.
             String variante = detalleDTO.getVariante();
             boolean esGrande = variante != null && variante.trim().equalsIgnoreCase("Entera");
-            Double precioUnit = (esGrande && producto.getPrecioEntera() != null
-                                 && producto.getPrecioEntera() > 0)
-                    ? producto.getPrecioEntera()
-                    : producto.getPrecio();
+            Double precioUnit;
+            if (esGrande) {
+                // Pidieron la entera: DEBE tener precio de entera cargado. Si no lo
+                // tiene, rechazamos en vez de cobrar mal (antes cobraba la entera al
+                // precio de la media, perdiendo plata sin avisar).
+                if (producto.getPrecioEntera() == null || producto.getPrecioEntera() <= 0) {
+                    throw new BusinessException(
+                        "La pizza '" + producto.getNombre() + "' no tiene cargado el precio de la "
+                        + "versión entera. Cargalo en el gestor de menú antes de venderla entera.");
+                }
+                precioUnit = producto.getPrecioEntera();
+            } else {
+                precioUnit = producto.getPrecio();
+            }
 
             DetallePedido detalle = DetallePedido.builder()
                     .pedido(pedidoGuardado)
