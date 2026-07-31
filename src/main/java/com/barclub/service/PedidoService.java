@@ -119,6 +119,7 @@ public class PedidoService {
                 .direccionEntrega(dto.getDireccionEntrega())
                 .horarioEntrega(dto.getHorarioEntrega())
                 .mesa(dto.getMesa())
+                .metodoPagoPreferido(dto.getMetodoPagoPreferido())
                 .build();
 
         if (dto.getClienteId() != null) {
@@ -365,6 +366,7 @@ public class PedidoService {
                 .direccionEntrega(p.getDireccionEntrega())
                 .horarioEntrega(p.getHorarioEntrega())
                 .mesa(p.getMesa())
+                .metodoPagoPreferido(p.getMetodoPagoPreferido())
                 .cliente(p.getCliente() != null ? clienteService.toDTO(p.getCliente()) : null)
                 .usuario(p.getUsuario() != null ? usuarioService.toDTO(p.getUsuario()) : null)
                 .detalles(detalles)

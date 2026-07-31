@@ -1,6 +1,7 @@
 package com.barclub.dto;
 
 import com.barclub.entity.TipoPedido;
+import com.barclub.entity.MetodoPago;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -29,6 +30,9 @@ public class PedidoRequestDTO {
 
     // Nº de mesa (pedidos en salón)
     private String mesa;
+
+    // Método de pago elegido por el cliente (opcional)
+    private MetodoPago metodoPagoPreferido;
 
     @NotEmpty(message = "El pedido debe tener al menos un producto")
     @Valid

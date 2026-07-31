@@ -2,6 +2,7 @@ package com.barclub.dto;
 
 import com.barclub.entity.EstadoPedido;
 import com.barclub.entity.TipoPedido;
+import com.barclub.entity.MetodoPago;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -26,6 +27,7 @@ public class PedidoResponseDTO {
     private String direccionEntrega;
     private String mesa;
     private LocalTime horarioEntrega;
+    private MetodoPago metodoPagoPreferido;
     private ClienteResponseDTO cliente;
     private UsuarioResponseDTO usuario;
     private List<DetallePedidoResponseDTO> detalles;

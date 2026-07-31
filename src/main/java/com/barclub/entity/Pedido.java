@@ -82,4 +82,10 @@ public class Pedido {
     // Nº de mesa (pedidos en salón, rol MOZO)
     @Column(length = 20)
     private String mesa;
+
+    // Método de pago que eligió el cliente al hacer el pedido (referencia para
+    // el cajero al cobrar; puede ser null y el cajero lo cambia si hace falta).
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private MetodoPago metodoPagoPreferido;
 }
