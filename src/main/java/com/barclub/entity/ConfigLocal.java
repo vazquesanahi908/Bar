@@ -94,4 +94,9 @@ public class ConfigLocal {
     @Column(length = 1000)
     @Builder.Default
     private String loginEmails = "[]";
+
+    // Métodos de pago que acepta el local, separados por coma (ej:
+    // "EFECTIVO,TARJETA,TRANSFERENCIA"). Si es null o vacío, se aceptan todos.
+    @Column(length = 100)
+    private String pagosAceptados;
 }
