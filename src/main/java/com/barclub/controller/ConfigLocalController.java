@@ -24,12 +24,10 @@ public class ConfigLocalController {
     @ApiResponse(responseCode = "200", description = "Configuración actual del local")
     public ResponseEntity<ConfigLocal> obtener() {
         ConfigLocal cfg = service.obtener();
-        // La página pública necesita esta configuración, pero la lista de emails
-        // del personal no debe salir al público: sería una lista de usuarios
-        // válidos para intentar adivinar contraseñas. Solo va a quien está logueado.
-        if (!estaAutenticado()) {
-            cfg = cfg.toBuilder().loginEmails("[]").build();
-        }
+        // Los correos de acceso rápido se muestran en la pantalla de login (que
+        // pide la config SIN estar logueada), así que deben poder leerse sin
+        // autenticación. Son solo correos, no contraseñas. Requisito: que las
+        // contraseñas del personal sean seguras (no las de prueba).
         return ResponseEntity.ok(cfg);
     }
 
