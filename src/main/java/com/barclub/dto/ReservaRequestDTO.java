@@ -9,6 +9,7 @@ import java.time.LocalTime;
 public class ReservaRequestDTO {
 
     @NotBlank(message = "El nombre del cliente es obligatorio")
+    @Size(min = 2, max = 60, message = "El nombre debe tener entre 2 y 60 caracteres")
     private String nombreCliente;
 
     @NotNull(message = "La fecha es obligatoria")

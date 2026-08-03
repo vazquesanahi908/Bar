@@ -40,12 +40,10 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET,  "/api/config").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/pedidos").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/reservas").permitAll()
-                .requestMatchers(HttpMethod.PATCH,"/api/pedidos/*/cancelar").permitAll()
-                .requestMatchers(HttpMethod.PATCH,"/api/reservas/*/cancelar").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/usuarios/login").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/usuarios/reset-password").permitAll()
-                // Swagger
-                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                // Swagger: solo ADMIN (no exponer el mapa de la API al público)
+                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").hasRole("ADMIN")
 
                 // ── SOLO ADMIN: administración del sistema ──────────────────
                 // Gestión de usuarios, configuración del local y backups.
@@ -77,6 +75,10 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.DELETE, "/api/pedidos/**").hasAnyRole("ADMIN", "CAJERO")
                 // Crear pedidos: también el mozo desde el salón.
                 .requestMatchers(HttpMethod.POST,   "/api/pedidos/**").hasAnyRole("ADMIN", "CAJERO", "MOZO")
+                // Cancelar un pedido: solo admin y cajero (el cliente cancela por WhatsApp).
+                .requestMatchers(HttpMethod.PATCH,  "/api/pedidos/*/cancelar").hasAnyRole("ADMIN", "CAJERO")
+                // Cambiar el estado (avance del Kanban): admin, cajero y cocina (no el mozo).
+                .requestMatchers(HttpMethod.PATCH,  "/api/pedidos/*/estado").hasAnyRole("ADMIN", "CAJERO", "COCINA")
                 // Ver pedidos y cambiar su estado: los cuatro roles
                 // (cocina necesita marcar LISTO).
 
@@ -99,7 +101,9 @@ public class SecurityConfig {
         config.setAllowedOriginPatterns(List.of("*"));
         config.setAllowedMethods(List.of("GET","POST","PUT","PATCH","DELETE","OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
-        config.setAllowCredentials(true);
+        // La app autentica con token en el header Authorization, no con cookies.
+        // Con credenciales en false, permitir cualquier origen deja de ser riesgoso.
+        config.setAllowCredentials(false);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/**", config);
         return source;

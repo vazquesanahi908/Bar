@@ -22,6 +22,7 @@ public class PedidoResponseDTO {
     private EstadoPedido estado;
     private TipoPedido tipo;
     private Double total;
+    private Double costoEnvio;
     private String nombreCliente;
     private String telefonoCliente;
     private String direccionEntrega;

@@ -88,4 +88,8 @@ public class Pedido {
     @Enumerated(EnumType.STRING)
     @Column(length = 20)
     private MetodoPago metodoPagoPreferido;
+
+    // Costo de envío cobrado al cliente (0 en retiro y en el local). Se suma al total.
+    @Column
+    private Double costoEnvio;
 }

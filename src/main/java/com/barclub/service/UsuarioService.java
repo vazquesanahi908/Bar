@@ -3,6 +3,7 @@ package com.barclub.service;
 import com.barclub.dto.UsuarioRequestDTO;
 import com.barclub.dto.UsuarioResponseDTO;
 import com.barclub.entity.Usuario;
+import com.barclub.entity.Rol;
 import com.barclub.exception.BusinessException;
 import com.barclub.exception.ResourceNotFoundException;
 import com.barclub.repository.UsuarioRepository;
@@ -129,8 +130,11 @@ public class UsuarioService {
     }
 
     public void eliminar(Long id) {
-        if (!usuarioRepository.existsById(id)) {
-            throw new ResourceNotFoundException("Usuario", id);
+        Usuario usuario = usuarioRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario", id));
+        // No permitir quedarse sin ningún administrador.
+        if (usuario.getRol() == Rol.ADMIN && usuarioRepository.countByRol(Rol.ADMIN) <= 1) {
+            throw new BusinessException("No se puede eliminar el único administrador del sistema.");
         }
         usuarioRepository.deleteById(id);
     }
@@ -139,9 +143,13 @@ public class UsuarioService {
     @Transactional(readOnly = true)
     public Optional<UsuarioResponseDTO> login(String email, String password) {
         if (email == null || password == null) return Optional.empty();
-        return usuarioRepository.findByEmail(email.trim())
+        // Freno de fuerza bruta: mismo control de intentos que el reset de contraseña.
+        controlarIntentos();
+        Optional<UsuarioResponseDTO> res = usuarioRepository.findByEmail(email.trim())
                 .filter(u -> passwordEncoder.matches(password, u.getPassword()))
                 .map(this::toDTO);
+        if (res.isPresent()) { limpiarIntentos(); } else { registrarFallo(); }
+        return res;
     }
 
     public UsuarioResponseDTO toDTO(Usuario u) {

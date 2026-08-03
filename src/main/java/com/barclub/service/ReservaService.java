@@ -27,6 +27,19 @@ public class ReservaService {
     private final ClienteRepository clienteRepository;
     private final ClienteService clienteService;
 
+    // Anti-duplicación: rechaza una reserva idéntica repetida en pocos segundos
+    // (doble submit/reintento). No bloquea reservas legítimas distintas.
+    private static final java.util.Map<String, Long> ULTIMAS_RESERVAS = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final long VENTANA_ANTIDUP_MS = 8000;
+    private static synchronized boolean duplicadoReciente(String clave) {
+        long ahora = System.currentTimeMillis();
+        ULTIMAS_RESERVAS.values().removeIf(t -> ahora - t > VENTANA_ANTIDUP_MS);
+        Long prev = ULTIMAS_RESERVAS.get(clave);
+        if (prev != null && ahora - prev < VENTANA_ANTIDUP_MS) return true;
+        ULTIMAS_RESERVAS.put(clave, ahora);
+        return false;
+    }
+
     // ---- Listar todas ----
     @Transactional(readOnly = true)
     public List<ReservaResponseDTO> listarTodas() {
@@ -66,6 +79,20 @@ public class ReservaService {
         // Validar que la fecha no sea pasada
         if (dto.getFecha().isBefore(LocalDate.now())) {
             throw new BusinessException("No se pueden hacer reservas en fechas pasadas");
+        }
+        // Si la reserva es para hoy, la hora no puede ser una que ya pasó.
+        if (dto.getFecha().isEqual(LocalDate.now())
+                && dto.getHora() != null
+                && dto.getHora().isBefore(LocalTime.now())) {
+            throw new BusinessException("No se pueden hacer reservas en un horario que ya pasó");
+        }
+
+        // Anti-duplicado: misma reserva (teléfono, fecha, hora, nombre) en segundos → doble envío.
+        String firmaRes = "RES|" + (dto.getTelefono() == null ? "" : dto.getTelefono().trim())
+                + "|" + dto.getFecha() + "|" + dto.getHora()
+                + "|" + (dto.getNombreCliente() == null ? "" : dto.getNombreCliente().trim());
+        if (duplicadoReciente(firmaRes)) {
+            throw new BusinessException("Ya recibimos esta reserva hace unos segundos. Esperá un momento antes de reenviarla.");
         }
 
         Reserva reserva = Reserva.builder()

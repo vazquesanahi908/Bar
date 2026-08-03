@@ -24,6 +24,19 @@ public class PedidoService {
 
     private static final Logger logger = LoggerFactory.getLogger(PedidoService.class);
 
+    // Anti-duplicación: rechaza un pedido idéntico repetido en pocos segundos
+    // (doble submit, reintento por red). No bloquea pedidos legítimos distintos.
+    private static final java.util.Map<String, Long> ULTIMOS_ENVIOS = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final long VENTANA_ANTIDUP_MS = 8000;
+    private static synchronized boolean duplicadoReciente(String clave) {
+        long ahora = System.currentTimeMillis();
+        ULTIMOS_ENVIOS.values().removeIf(t -> ahora - t > VENTANA_ANTIDUP_MS);
+        Long prev = ULTIMOS_ENVIOS.get(clave);
+        if (prev != null && ahora - prev < VENTANA_ANTIDUP_MS) return true;
+        ULTIMOS_ENVIOS.put(clave, ahora);
+        return false;
+    }
+
     private final PedidoRepository pedidoRepository;
     private final ProductoRepository productoRepository;
     private final ClienteRepository clienteRepository;
@@ -107,6 +120,20 @@ public class PedidoService {
             throw new BusinessException("El delivery requiere una dirección de entrega");
         }
 
+        // Anti-duplicado: si llega un pedido idéntico (mismo tipo, teléfono, nombre
+        // e ítems) en los últimos segundos, es un doble envío/reintento → se rechaza.
+        if (dto.getDetalles() != null) {
+            String firma = "PED|" + dto.getTipo() + "|"
+                    + (dto.getTelefonoCliente() == null ? "" : dto.getTelefonoCliente().trim()) + "|"
+                    + (dto.getNombreCliente() == null ? "" : dto.getNombreCliente().trim()) + "|"
+                    + dto.getDetalles().stream()
+                        .map(d -> d.getProductoId() + ":" + d.getCantidad() + ":" + (d.getVariante() == null ? "" : d.getVariante()))
+                        .sorted().collect(Collectors.joining(","));
+            if (duplicadoReciente(firma)) {
+                throw new BusinessException("Ya recibimos este pedido hace unos segundos. Esperá un momento antes de reenviarlo.");
+            }
+        }
+
         Pedido pedido = Pedido.builder()
                 .fecha(LocalDate.now())
                 .hora(LocalTime.now())
@@ -175,6 +202,14 @@ public class PedidoService {
             total += detalle.getSubtotal();
         }
 
+        // Costo de envío: solo en delivery, tomado de la configuración del local.
+        double costoEnvio = 0.0;
+        if (pedidoGuardado.getTipo() == TipoPedido.DELIVERY) {
+            Integer cd = configLocalService.obtener().getCostoDelivery();
+            costoEnvio = (cd != null) ? cd.doubleValue() : 0.0;
+            total += costoEnvio;
+        }
+        pedidoGuardado.setCostoEnvio(costoEnvio);
         pedidoGuardado.setTotal(total);
         Pedido resultado = pedidoRepository.save(pedidoGuardado);
         logger.info("PEDIDO CREADO: id={}, total=${}, tipo={}", resultado.getId(), resultado.getTotal(), resultado.getTipo());
@@ -202,6 +237,11 @@ public class PedidoService {
                 .orElseThrow(() -> new ResourceNotFoundException("Pedido", id));
 
         EstadoPedido estadoAnterior = pedido.getEstado();
+        // ENTREGADO solo lo pone el cobro (al registrar la venta), nunca este
+        // endpoint, para que no queden pedidos entregados sin venta registrada.
+        if (nuevoEstado == EstadoPedido.ENTREGADO) {
+            throw new BusinessException("El pedido se marca como entregado al cobrarlo, no por este medio.");
+        }
         validarTransicionEstado(estadoAnterior, nuevoEstado);
 
         pedido.setEstado(nuevoEstado);
@@ -361,6 +401,7 @@ public class PedidoService {
                 .estado(p.getEstado())
                 .tipo(p.getTipo())
                 .total(p.getTotal())
+                .costoEnvio(p.getCostoEnvio())
                 .nombreCliente(p.getNombreCliente())
                 .telefonoCliente(p.getTelefonoCliente())
                 .direccionEntrega(p.getDireccionEntrega())
