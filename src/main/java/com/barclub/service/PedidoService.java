@@ -270,12 +270,12 @@ public class PedidoService {
             throw new BusinessException("No se puede cancelar un pedido en estado: " + pedido.getEstado());
         }
 
-        LocalDateTime creacion = LocalDateTime.of(pedido.getFecha(), pedido.getHora());
-        LocalDateTime limite = creacion.plusMinutes(30);
-        if (LocalDateTime.now().isAfter(limite)) {
-            logger.warn("CANCELACIÓN TARDÍA: pedidoId={}, cliente='{}'", id, pedido.getNombreCliente());
-            throw new BusinessException("El tiempo para cancelar este pedido ha vencido (30 minutos desde la creación)");
-        }
+        // Antes había un límite de 30 minutos desde la creación para poder cancelar.
+        // Problema de negocio: si un pedido viejo no se puede cancelar, la única forma
+        // de sacarlo de la tabla era "Cobrarlo", y eso dejaba un monto registrado que
+        // nadie pagó. Por eso se quita el límite de tiempo: se puede cancelar sin
+        // importar la antigüedad, mientras el pedido no esté ENTREGADO ni CANCELADO
+        // (chequeado arriba).
 
         pedido.setEstado(EstadoPedido.CANCELADO);
         logger.info("PEDIDO CANCELADO: id={}, cliente='{}'", id, pedido.getNombreCliente());
@@ -373,10 +373,12 @@ public class PedidoService {
         }
     }
 
+    // Mismo criterio que cancelar(): cancelable mientras no esté ENTREGADO ni
+    // CANCELADO, sin límite de tiempo desde la creación.
     private boolean esCancelable(Pedido pedido) {
-        if (pedido.getEstado() != EstadoPedido.PENDIENTE) return false;
-        LocalDateTime creacion = LocalDateTime.of(pedido.getFecha(), pedido.getHora());
-        return LocalDateTime.now().isBefore(creacion.plusMinutes(30));
+        return pedido.getEstado() == EstadoPedido.PENDIENTE
+                || pedido.getEstado() == EstadoPedido.PREPARACION
+                || pedido.getEstado() == EstadoPedido.LISTO;
     }
 
     public PedidoResponseDTO toDTO(Pedido p) {
