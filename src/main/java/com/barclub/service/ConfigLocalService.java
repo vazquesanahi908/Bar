@@ -38,6 +38,7 @@ public class ConfigLocalService {
                 .estadoManual("auto")
                 .heroUrl("")
                 .heroPos("center")
+                .herotextcolor("")
                 .build();
     }
 

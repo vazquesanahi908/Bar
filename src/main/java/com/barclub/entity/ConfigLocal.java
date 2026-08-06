@@ -86,6 +86,11 @@ public class ConfigLocal {
     @Builder.Default
     private String temaMode = "dark";
 
+    // Color de los textos que van sobre la foto de portada/hero (#rrggbb).
+    // Vacío = color por defecto de la página pública. Configurable desde
+    // Apariencia (pestaña "Texto de portada" del selector de color).
+    private String herotextcolor;
+
     // Momento del último cierre de caja (ISO datetime). Vacío = nunca se cerró.
     private String cierreCaja;
 
