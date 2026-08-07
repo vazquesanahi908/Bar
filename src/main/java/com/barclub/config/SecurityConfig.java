@@ -97,6 +97,11 @@ public class SecurityConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
+        // Única fuente de verdad de CORS para toda la API (antes había también
+        // @CrossOrigin(origins = "*") repetido en 7 controllers, redundante con
+        // esta configuración global y más propenso a quedar desactualizado si
+        // se cambia acá pero no allá). Cualquier ajuste de CORS futuro se hace
+        // solo en este lugar.
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOriginPatterns(List.of("*"));
         config.setAllowedMethods(List.of("GET","POST","PUT","PATCH","DELETE","OPTIONS"));

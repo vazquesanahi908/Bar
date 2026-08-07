@@ -15,7 +15,6 @@ import java.time.LocalDate;
 @RestController
 @RequestMapping("/api/dashboard")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 @Tag(name = "Dashboard", description = "Resumen de actividad diaria del bar")
 public class DashboardController {
 

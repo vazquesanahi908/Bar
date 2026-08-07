@@ -23,7 +23,6 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/usuarios")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 @Tag(name = "Usuarios", description = "Gestión de usuarios del sistema y autenticación")
 public class UsuarioController {
 

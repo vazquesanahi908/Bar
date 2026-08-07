@@ -20,7 +20,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/productos")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 @Tag(name = "Productos", description = "ABM de productos del menú del bar")
 public class ProductoController {
 

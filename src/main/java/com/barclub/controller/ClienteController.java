@@ -20,7 +20,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/clientes")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 @Tag(name = "Clientes", description = "ABM de clientes registrados del bar")
 public class ClienteController {
 

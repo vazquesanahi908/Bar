@@ -24,7 +24,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/pedidos")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 @Tag(name = "Pedidos", description = "Gestión de pedidos del bar (local, delivery y retiro)")
 public class PedidoController {
 
