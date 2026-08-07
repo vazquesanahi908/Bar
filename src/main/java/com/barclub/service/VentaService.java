@@ -200,13 +200,32 @@ public class VentaService {
     // ---- Eliminar ventas de una fecha (borrado definitivo) ----
     public void eliminarPorFecha(LocalDate fecha) {
         List<Venta> ventas = ventaRepository.findByFecha(fecha);
+        // Si se borra la venta, el pedido que quedó marcado como ENTREGADO por
+        // ese cobro debe volver a un estado utilizable (LISTO). Si no, ese
+        // pedido queda invisible para siempre: no aparece en "Pedidos activos"
+        // (no está en PENDIENTE/PREPARACION/LISTO) y tampoco en Ventas (se
+        // borró), y no se puede volver a cobrar (el registro de venta lo
+        // bloquea mientras siga en ENTREGADO).
+        for (Venta v : ventas) {
+            Pedido pedido = v.getPedido();
+            if (pedido != null && pedido.getEstado() == EstadoPedido.ENTREGADO) {
+                pedido.setEstado(EstadoPedido.LISTO);
+                pedidoRepository.save(pedido);
+            }
+        }
         ventaRepository.deleteAll(ventas);
     }
 
     // ---- Eliminar una venta por id ----
     public void eliminarPorId(Long id) {
-        if (!ventaRepository.existsById(id)) {
-            throw new ResourceNotFoundException("Venta", id);
+        Venta venta = ventaRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Venta", id));
+        // Mismo motivo que en eliminarPorFecha: sin esto el pedido queda
+        // huérfano (invisible en Pedidos activos y sin venta que lo respalde).
+        Pedido pedido = venta.getPedido();
+        if (pedido != null && pedido.getEstado() == EstadoPedido.ENTREGADO) {
+            pedido.setEstado(EstadoPedido.LISTO);
+            pedidoRepository.save(pedido);
         }
         ventaRepository.deleteById(id);
     }

@@ -66,8 +66,12 @@ public class ProductoService {
 
     // ---- Crear ----
     public ProductoResponseDTO crear(ProductoRequestDTO dto) {
+        if (productoRepository.existsByNombreIgnoreCaseAndCategoria(dto.getNombre().trim(), dto.getCategoria())) {
+            throw new BusinessException(
+                "Ya existe un producto llamado \"" + dto.getNombre().trim() + "\" en la categoría " + dto.getCategoria() + ".");
+        }
         Producto producto = Producto.builder()
-                .nombre(dto.getNombre())
+                .nombre(dto.getNombre().trim())
                 .descripcion(dto.getDescripcion())
                 .precio(dto.getPrecio())
                 .costo(dto.getCosto())
@@ -84,7 +88,12 @@ public class ProductoService {
         Producto producto = productoRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Producto", id));
 
-        producto.setNombre(dto.getNombre());
+        if (productoRepository.existsByNombreIgnoreCaseAndCategoriaAndIdNot(dto.getNombre().trim(), dto.getCategoria(), id)) {
+            throw new BusinessException(
+                "Ya existe un producto llamado \"" + dto.getNombre().trim() + "\" en la categoría " + dto.getCategoria() + ".");
+        }
+
+        producto.setNombre(dto.getNombre().trim());
         producto.setDescripcion(dto.getDescripcion());
         producto.setPrecio(dto.getPrecio());
         producto.setCosto(dto.getCosto());
