@@ -58,6 +58,22 @@ public class ReservaService {
                 .collect(Collectors.toList());
     }
 
+    // ---- Reservas próximas (hoy + los próximos N días) ----
+    // Pensado para que el panel avise de reservas nuevas SIN IMPORTAR la
+    // fecha (antes solo se enteraban de las reservas de hoy — una reserva
+    // para dentro de unos días no generaba ningún aviso hasta esa fecha) y
+    // para armar el recordatorio de "mañana tenés una reserva".
+    @Transactional(readOnly = true)
+    public List<ReservaResponseDTO> listarProximas(int dias) {
+        LocalDate desde = LocalDate.now();
+        LocalDate hasta = desde.plusDays(Math.max(dias, 0));
+        return reservaRepository.findByFechaBetweenAndEstadoOrderByFechaAscHoraAsc(
+                        desde, hasta, Reserva.EstadoReserva.CONFIRMADA)
+                .stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
+    }
+
     // ---- Reservas por fecha ----
     @Transactional(readOnly = true)
     public List<ReservaResponseDTO> listarPorFecha(LocalDate fecha) {

@@ -41,6 +41,14 @@ public class ReservaController {
         return ResponseEntity.ok(reservaService.listarDeHoy());
     }
 
+    @GetMapping("/proximas")
+    @Operation(summary = "Listar reservas próximas", description = "Reservas confirmadas desde hoy hasta N días adelante (por defecto 7). Se usa para avisos y recordatorios, sin importar la fecha de la reserva.")
+    @ApiResponse(responseCode = "200", description = "Reservas próximas")
+    public ResponseEntity<List<ReservaResponseDTO>> listarProximas(
+            @RequestParam(defaultValue = "7") int dias) {
+        return ResponseEntity.ok(reservaService.listarProximas(dias));
+    }
+
     @GetMapping("/fecha")
     @Operation(summary = "Listar reservas por fecha", description = "Formato de fecha: YYYY-MM-DD.")
     @ApiResponse(responseCode = "200", description = "Reservas de la fecha indicada")
