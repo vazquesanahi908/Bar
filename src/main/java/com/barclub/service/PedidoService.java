@@ -46,6 +46,7 @@ public class PedidoService {
     private final com.barclub.service.ConfigLocalService configLocalService;
     private final ClienteService clienteService;
     private final UsuarioService usuarioService;
+    private final com.barclub.websocket.RealtimeNotifier realtimeNotifier;
 
     @Transactional(readOnly = true)
     public List<PedidoResponseDTO> listarTodos() {
@@ -213,6 +214,7 @@ public class PedidoService {
         pedidoGuardado.setTotal(total);
         Pedido resultado = pedidoRepository.save(pedidoGuardado);
         logger.info("PEDIDO CREADO: id={}, total=${}, tipo={}", resultado.getId(), resultado.getTotal(), resultado.getTipo());
+        realtimeNotifier.avisarPedidos();
         return toDTO(resultado);
     }
 
@@ -249,7 +251,9 @@ public class PedidoService {
             pedido.setEntregadoEn(java.time.LocalDateTime.now());
         }
         logger.info("ESTADO PEDIDO: id={} -> {} -> {}", id, estadoAnterior, nuevoEstado);
-        return toDTO(pedidoRepository.save(pedido));
+        PedidoResponseDTO resultado = toDTO(pedidoRepository.save(pedido));
+        realtimeNotifier.avisarPedidos();
+        return resultado;
     }
 
     public PedidoResponseDTO cancelar(Long id) {
@@ -279,7 +283,9 @@ public class PedidoService {
 
         pedido.setEstado(EstadoPedido.CANCELADO);
         logger.info("PEDIDO CANCELADO: id={}, cliente='{}'", id, pedido.getNombreCliente());
-        return toDTO(pedidoRepository.save(pedido));
+        PedidoResponseDTO resultado = toDTO(pedidoRepository.save(pedido));
+        realtimeNotifier.avisarPedidos();
+        return resultado;
     }
 
     public void eliminarEntregadosHoy() {

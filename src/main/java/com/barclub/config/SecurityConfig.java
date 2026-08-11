@@ -42,6 +42,10 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/reservas").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/usuarios/login").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/usuarios/reset-password").permitAll()
+                // Canal de avisos en tiempo real (WebSocket): nunca manda datos
+                // sensibles, solo un aviso de "algo cambió" (ver RealtimeNotifier),
+                // así que no necesita requerir sesión para el handshake.
+                .requestMatchers("/ws/**").permitAll()
                 // Swagger: solo ADMIN (no exponer el mapa de la API al público)
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").hasRole("ADMIN")
 
@@ -111,6 +115,10 @@ public class SecurityConfig {
         config.setAllowCredentials(false);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/**", config);
+        // El handshake inicial de SockJS (antes de convertirse en WebSocket)
+        // es un pedido HTTP normal, así que también necesita CORS habilitado
+        // para que el frontend (otro dominio, en Netlify) pueda conectarse.
+        source.registerCorsConfiguration("/ws/**", config);
         return source;
     }
 }

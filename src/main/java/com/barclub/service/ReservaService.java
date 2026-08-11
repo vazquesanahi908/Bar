@@ -26,6 +26,7 @@ public class ReservaService {
     private final ReservaRepository reservaRepository;
     private final ClienteRepository clienteRepository;
     private final ClienteService clienteService;
+    private final com.barclub.websocket.RealtimeNotifier realtimeNotifier;
 
     // Anti-duplicación: rechaza una reserva idéntica repetida en pocos segundos
     // (doble submit/reintento). No bloquea reservas legítimas distintas.
@@ -128,7 +129,9 @@ public class ReservaService {
             reserva.setCliente(cliente);
         }
 
-        return toDTO(reservaRepository.save(reserva));
+        ReservaResponseDTO resultado = toDTO(reservaRepository.save(reserva));
+        realtimeNotifier.avisarReservas();
+        return resultado;
     }
 
     // ---- Actualizar reserva ----
@@ -147,7 +150,9 @@ public class ReservaService {
         reserva.setTelefono(dto.getTelefono());
         reserva.setAclaraciones(dto.getAclaraciones());
 
-        return toDTO(reservaRepository.save(reserva));
+        ReservaResponseDTO resultado = toDTO(reservaRepository.save(reserva));
+        realtimeNotifier.avisarReservas();
+        return resultado;
     }
 
     // ---- Cancelar reserva ----
@@ -163,7 +168,9 @@ public class ReservaService {
         }
 
         reserva.setEstado(Reserva.EstadoReserva.CANCELADA);
-        return toDTO(reservaRepository.save(reserva));
+        ReservaResponseDTO resultado = toDTO(reservaRepository.save(reserva));
+        realtimeNotifier.avisarReservas();
+        return resultado;
     }
 
     // ---- Marcar como completada ----

@@ -33,6 +33,7 @@ public class VentaService {
     private final VentaRepository ventaRepository;
     private final PedidoRepository pedidoRepository;
     private final ConfigLocalService configLocalService;
+    private final com.barclub.websocket.RealtimeNotifier realtimeNotifier;
 
     // ---- Registrar venta (cierra el pedido) ----
     public VentaResponseDTO registrar(VentaRequestDTO dto) {
@@ -69,6 +70,7 @@ public class VentaService {
             pedido.setEntregadoEn(java.time.LocalDateTime.now());
         }
         pedidoRepository.save(pedido);
+        realtimeNotifier.avisarPedidos();
 
         return toDTO(ventaRepository.save(venta));
     }
@@ -214,6 +216,7 @@ public class VentaService {
             }
         }
         ventaRepository.deleteAll(ventas);
+        realtimeNotifier.avisarPedidos();
     }
 
     // ---- Eliminar una venta por id ----
@@ -228,6 +231,7 @@ public class VentaService {
             pedidoRepository.save(pedido);
         }
         ventaRepository.deleteById(id);
+        realtimeNotifier.avisarPedidos();
     }
 
     // ---- Mapper ----
