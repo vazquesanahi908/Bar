@@ -302,12 +302,19 @@ public class PedidoService {
         }
     }
 
+    private boolean esEditable(EstadoPedido estado) {
+        // Se puede seguir editando (productos y datos del cliente) mientras
+        // está PENDIENTE o en PREPARACION. Una vez LISTO se bloquea — ya se
+        // está por entregar, no tiene sentido seguir tocándolo.
+        return estado == EstadoPedido.PENDIENTE || estado == EstadoPedido.PREPARACION;
+    }
+
     public PedidoResponseDTO agregarDetalle(Long pedidoId, DetallePedidoRequestDTO detalleDTO) {
         Pedido pedido = pedidoRepository.findById(pedidoId)
                 .orElseThrow(() -> new ResourceNotFoundException("Pedido", pedidoId));
 
-        if (pedido.getEstado() != EstadoPedido.PENDIENTE) {
-            throw new BusinessException("Solo se pueden modificar pedidos en estado PENDIENTE");
+        if (!esEditable(pedido.getEstado())) {
+            throw new BusinessException("Solo se pueden modificar pedidos en estado PENDIENTE o PREPARACION");
         }
 
         Producto producto = productoRepository.findById(detalleDTO.getProductoId())
@@ -337,20 +344,75 @@ public class PedidoService {
                 );
 
         recalcularTotal(pedido);
-        return toDTO(pedidoRepository.save(pedido));
+        PedidoResponseDTO resultado = toDTO(pedidoRepository.save(pedido));
+        realtimeNotifier.avisarPedidos();
+        return resultado;
+    }
+
+    // ---- Cambiar la cantidad de un producto ya cargado en el pedido ----
+    // Si la nueva cantidad es 0 o menos, directamente se saca el producto
+    // del pedido (mismo resultado que eliminarDetalle).
+    public PedidoResponseDTO cambiarCantidadDetalle(Long pedidoId, Long detalleId, int nuevaCantidad) {
+        Pedido pedido = pedidoRepository.findById(pedidoId)
+                .orElseThrow(() -> new ResourceNotFoundException("Pedido", pedidoId));
+
+        if (!esEditable(pedido.getEstado())) {
+            throw new BusinessException("Solo se pueden modificar pedidos en estado PENDIENTE o PREPARACION");
+        }
+
+        if (nuevaCantidad <= 0) {
+            pedido.getDetalles().removeIf(d -> d.getId().equals(detalleId));
+        } else {
+            DetallePedido detalle = pedido.getDetalles().stream()
+                    .filter(d -> d.getId().equals(detalleId))
+                    .findFirst()
+                    .orElseThrow(() -> new ResourceNotFoundException("Detalle de pedido", detalleId));
+            detalle.setCantidad(nuevaCantidad);
+            detalle.setSubtotal(detalle.getPrecioUnitario() * nuevaCantidad);
+        }
+
+        recalcularTotal(pedido);
+        PedidoResponseDTO resultado = toDTO(pedidoRepository.save(pedido));
+        realtimeNotifier.avisarPedidos();
+        return resultado;
+    }
+
+    // ---- Editar los datos del cliente de un pedido ya creado ----
+    // Para corregir un dato mal tipeado por el cliente (nombre, teléfono,
+    // dirección, mesa) sin tener que cancelar y rehacer todo el pedido.
+    // Cada campo es opcional: solo se actualiza el que venga con valor.
+    public PedidoResponseDTO actualizarDatosCliente(Long pedidoId, com.barclub.dto.PedidoDatosClienteDTO dto) {
+        Pedido pedido = pedidoRepository.findById(pedidoId)
+                .orElseThrow(() -> new ResourceNotFoundException("Pedido", pedidoId));
+
+        if (!esEditable(pedido.getEstado())) {
+            throw new BusinessException("Solo se pueden modificar pedidos en estado PENDIENTE o PREPARACION");
+        }
+
+        if (dto.getNombreCliente() != null) pedido.setNombreCliente(dto.getNombreCliente());
+        if (dto.getTelefonoCliente() != null) pedido.setTelefonoCliente(dto.getTelefonoCliente());
+        if (dto.getDireccionEntrega() != null) pedido.setDireccionEntrega(dto.getDireccionEntrega());
+        if (dto.getMesa() != null) pedido.setMesa(dto.getMesa());
+
+        logger.info("DATOS CLIENTE ACTUALIZADOS: pedidoId={}", pedidoId);
+        PedidoResponseDTO resultado = toDTO(pedidoRepository.save(pedido));
+        realtimeNotifier.avisarPedidos();
+        return resultado;
     }
 
     public PedidoResponseDTO eliminarDetalle(Long pedidoId, Long detalleId) {
         Pedido pedido = pedidoRepository.findById(pedidoId)
                 .orElseThrow(() -> new ResourceNotFoundException("Pedido", pedidoId));
 
-        if (pedido.getEstado() != EstadoPedido.PENDIENTE) {
-            throw new BusinessException("Solo se pueden modificar pedidos en estado PENDIENTE");
+        if (!esEditable(pedido.getEstado())) {
+            throw new BusinessException("Solo se pueden modificar pedidos en estado PENDIENTE o PREPARACION");
         }
 
         pedido.getDetalles().removeIf(d -> d.getId().equals(detalleId));
         recalcularTotal(pedido);
-        return toDTO(pedidoRepository.save(pedido));
+        PedidoResponseDTO resultado = toDTO(pedidoRepository.save(pedido));
+        realtimeNotifier.avisarPedidos();
+        return resultado;
     }
 
     private void recalcularTotal(Pedido pedido) {

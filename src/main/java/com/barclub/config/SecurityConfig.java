@@ -46,6 +46,10 @@ public class SecurityConfig {
                 // sensibles, solo un aviso de "algo cambió" (ver RealtimeNotifier),
                 // así que no necesita requerir sesión para el handshake.
                 .requestMatchers("/ws/**").permitAll()
+                // Endpoint de solo prueba del canal en tiempo real (ver
+                // DevTestController) — no expone datos, solo reenvía una
+                // señal vacía. Se puede borrar junto con ese controller.
+                .requestMatchers("/api/dev/**").permitAll()
                 // Swagger: solo ADMIN (no exponer el mapa de la API al público)
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").hasRole("ADMIN")
 
@@ -77,6 +81,11 @@ public class SecurityConfig {
                 // ── Pedidos ────────────────────────────────────────────────
                 // Borrar pedidos es destructivo: admin y cajero.
                 .requestMatchers(HttpMethod.DELETE, "/api/pedidos/**").hasAnyRole("ADMIN", "CAJERO")
+                // Editar un pedido ya cargado (productos y datos del cliente,
+                // mientras esté PENDIENTE o PREPARACION): solo admin y cajero.
+                .requestMatchers(HttpMethod.POST,   "/api/pedidos/*/detalles").hasAnyRole("ADMIN", "CAJERO")
+                .requestMatchers(HttpMethod.PATCH,  "/api/pedidos/*/detalles/*/cantidad").hasAnyRole("ADMIN", "CAJERO")
+                .requestMatchers(HttpMethod.PATCH,  "/api/pedidos/*/datos-cliente").hasAnyRole("ADMIN", "CAJERO")
                 // Crear pedidos: también el mozo desde el salón.
                 .requestMatchers(HttpMethod.POST,   "/api/pedidos/**").hasAnyRole("ADMIN", "CAJERO", "MOZO")
                 // Cancelar un pedido: solo admin y cajero (el cliente cancela por WhatsApp).

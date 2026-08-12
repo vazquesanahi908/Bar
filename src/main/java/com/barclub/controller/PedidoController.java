@@ -118,7 +118,7 @@ public class PedidoController {
     }
 
     @PostMapping("/{id}/detalles")
-    @Operation(summary = "Agregar producto a pedido existente", description = "Solo funciona en pedidos en estado PENDIENTE.")
+    @Operation(summary = "Agregar producto a pedido existente", description = "Funciona en pedidos PENDIENTE o PREPARACION.")
     @ApiResponse(responseCode = "200", description = "Detalle agregado")
     @ApiResponse(responseCode = "400", description = "Pedido no está en estado PENDIENTE",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -131,9 +131,9 @@ public class PedidoController {
     }
 
     @DeleteMapping("/{pedidoId}/detalles/{detalleId}")
-    @Operation(summary = "Eliminar producto de un pedido", description = "Solo funciona en pedidos en estado PENDIENTE.")
+    @Operation(summary = "Eliminar producto de un pedido", description = "Funciona en pedidos PENDIENTE o PREPARACION.")
     @ApiResponse(responseCode = "200", description = "Detalle eliminado")
-    @ApiResponse(responseCode = "400", description = "Pedido no está en estado PENDIENTE",
+    @ApiResponse(responseCode = "400", description = "Pedido no está en un estado editable",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     @ApiResponse(responseCode = "404", description = "Pedido no encontrado",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -141,5 +141,32 @@ public class PedidoController {
             @PathVariable Long pedidoId,
             @PathVariable Long detalleId) {
         return ResponseEntity.ok(pedidoService.eliminarDetalle(pedidoId, detalleId));
+    }
+
+    @PatchMapping("/{pedidoId}/detalles/{detalleId}/cantidad")
+    @Operation(summary = "Cambiar la cantidad de un producto ya cargado", description = "Funciona en pedidos PENDIENTE o PREPARACION. Si la cantidad es 0 o menos, se elimina el producto.")
+    @ApiResponse(responseCode = "200", description = "Cantidad actualizada")
+    @ApiResponse(responseCode = "400", description = "Pedido no está en un estado editable",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Pedido o detalle no encontrado",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    public ResponseEntity<PedidoResponseDTO> cambiarCantidadDetalle(
+            @PathVariable Long pedidoId,
+            @PathVariable Long detalleId,
+            @RequestParam int cantidad) {
+        return ResponseEntity.ok(pedidoService.cambiarCantidadDetalle(pedidoId, detalleId, cantidad));
+    }
+
+    @PatchMapping("/{id}/datos-cliente")
+    @Operation(summary = "Editar los datos del cliente de un pedido", description = "Corrige nombre, teléfono, dirección o mesa de un pedido PENDIENTE o PREPARACION. Solo Admin y Cajero.")
+    @ApiResponse(responseCode = "200", description = "Datos actualizados")
+    @ApiResponse(responseCode = "400", description = "Pedido no está en un estado editable",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Pedido no encontrado",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    public ResponseEntity<PedidoResponseDTO> actualizarDatosCliente(
+            @PathVariable Long id,
+            @Valid @RequestBody com.barclub.dto.PedidoDatosClienteDTO dto) {
+        return ResponseEntity.ok(pedidoService.actualizarDatosCliente(id, dto));
     }
 }
