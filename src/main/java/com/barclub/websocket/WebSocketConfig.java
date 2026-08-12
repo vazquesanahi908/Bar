@@ -33,7 +33,15 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws")
                 .setAllowedOriginPatterns("*")
-                .withSockJS();
+                .withSockJS()
+                // El frontend (Netlify) y el backend (Railway) son dominios
+                // distintos. La app no usa cookies de sesión para nada (el
+                // login es con token, no con sesión de servidor), así que
+                // sacamos ese requisito acá: si se deja en true (default),
+                // el navegador puede bloquear la cookie entre-dominios y la
+                // conexión nunca termina de establecerse, aunque el endpoint
+                // esté activo y respondiendo bien a /ws/info.
+                .setSessionCookieNeeded(false);
     }
 
     @Override
