@@ -5,6 +5,7 @@ import com.barclub.entity.MetodoPago;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 import java.time.LocalTime;
 import java.util.List;
@@ -25,6 +26,7 @@ public class PedidoRequestDTO {
     // Para pedidos sin cuenta o delivery
     private String nombreCliente;
     private String telefonoCliente;
+    @Size(max = 200, message = "La dirección no puede superar los 200 caracteres")
     private String direccionEntrega;
     private LocalTime horarioEntrega;
 

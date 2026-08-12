@@ -11,7 +11,7 @@ import lombok.Data;
 public class ProductoRequestDTO {
 
     @NotBlank(message = "El nombre es obligatorio")
-    @Size(max = 80, message = "El nombre no puede superar los 80 caracteres")
+    @Size(max = 30, message = "El nombre no puede superar los 30 caracteres")
     private String nombre;
 
     private String descripcion;
