@@ -3,6 +3,7 @@ package com.barclub.dto;
 import com.barclub.entity.EstadoPedido;
 import com.barclub.entity.TipoPedido;
 import com.barclub.entity.MetodoPago;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -17,6 +18,7 @@ import java.util.List;
 @AllArgsConstructor
 public class PedidoResponseDTO {
     private Long id;
+    @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate fecha;
     private LocalTime hora;
     private EstadoPedido estado;
