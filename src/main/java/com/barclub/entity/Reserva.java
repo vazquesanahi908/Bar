@@ -23,7 +23,13 @@ public class Reserva {
     private String nombreCliente;
 
     @NotNull(message = "La fecha es obligatoria")
-    @Column(nullable = false)
+    // columnDefinition="DATE" fuerza que la columna sea siempre una fecha
+    // pura (sin componente de hora ni zona horaria) — sin esto, según cómo
+    // haya quedado creada la columna, un LocalDate puede terminar
+    // guardándose/leyéndose a través de una conversión de zona horaria (el
+    // backend tiene Jackson configurado en America/Argentina/Buenos_Aires)
+    // y correrse un día para atrás. Esto es justo lo reportado en QA.
+    @Column(nullable = false, columnDefinition = "DATE")
     private LocalDate fecha;
 
     @NotNull(message = "La hora es obligatoria")
