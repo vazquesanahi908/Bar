@@ -320,11 +320,27 @@ public class PedidoService {
         Producto producto = productoRepository.findById(detalleDTO.getProductoId())
                 .orElseThrow(() -> new ResourceNotFoundException("Producto", detalleDTO.getProductoId()));
 
-        logger.info("AGREGAR DETALLE: pedidoId={}, productoId={}, cantidad={}",
-                pedidoId, detalleDTO.getProductoId(), detalleDTO.getCantidad());
+        // El precio depende de la variante elegida: "Entera" usa
+        // precioEntera si el producto lo tiene cargado (pizzas); cualquier
+        // otra variante (salsa, guarnición, "Media", etc.) usa el precio
+        // base. Antes esto ignoraba la variante del todo y siempre usaba el
+        // precio base, aunque se hubiera elegido "Entera" — bug reportado
+        // en QA (se cobraba/mostraba como si fuera la opción más barata).
+        String variante = detalleDTO.getVariante();
+        double precio = ("Entera".equalsIgnoreCase(variante) && producto.getPrecioEntera() != null)
+                ? producto.getPrecioEntera()
+                : producto.getPrecio();
 
+        logger.info("AGREGAR DETALLE: pedidoId={}, productoId={}, variante={}, cantidad={}",
+                pedidoId, detalleDTO.getProductoId(), variante, detalleDTO.getCantidad());
+
+        // Fusiona con un detalle ya cargado solo si es el MISMO producto Y
+        // la MISMA variante — antes fusionaba por producto nomás, así que
+        // "Fugazzeta Media" y "Fugazzeta Entera" se mezclaban en una sola
+        // línea con la cantidad sumada, perdiendo cuál era cuál.
         pedido.getDetalles().stream()
-                .filter(d -> d.getProducto() != null && d.getProducto().getId().equals(producto.getId()))
+                .filter(d -> d.getProducto() != null && d.getProducto().getId().equals(producto.getId())
+                        && java.util.Objects.equals(d.getVariante(), variante))
                 .findFirst()
                 .ifPresentOrElse(
                         detalle -> {
@@ -336,8 +352,9 @@ public class PedidoService {
                                     .pedido(pedido)
                                     .producto(producto)
                                     .cantidad(detalleDTO.getCantidad())
-                                    .precioUnitario(producto.getPrecio())
-                                    .subtotal(producto.getPrecio() * detalleDTO.getCantidad())
+                                    .variante(variante)
+                                    .precioUnitario(precio)
+                                    .subtotal(precio * detalleDTO.getCantidad())
                                     .build();
                             pedido.getDetalles().add(nuevo);
                         }
