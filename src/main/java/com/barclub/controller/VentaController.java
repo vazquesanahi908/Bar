@@ -114,6 +114,14 @@ public class VentaController {
         return ResponseEntity.ok(ventaService.totalDesdeCierre());
     }
 
+    @GetMapping("/sesiones-hoy")
+    @Operation(summary = "Cajas de un día, cada una con su total", description = "Incluye todas las cajas cerradas ese día más la actualmente abierta (si corresponde y es hoy). Sin parámetro 'fecha', usa el día de hoy.")
+    @ApiResponse(responseCode = "200", description = "Lista de sesiones de caja del día")
+    public ResponseEntity<List<com.barclub.dto.SesionCajaDTO>> sesionesDeHoy(
+            @RequestParam(required = false) java.time.LocalDate fecha) {
+        return ResponseEntity.ok(ventaService.sesionesDe(fecha != null ? fecha : java.time.LocalDate.now()));
+    }
+
     @GetMapping("/informe")
     @Operation(summary = "Informe de ventas por período",
                description = "Facturación, desglose por método de pago y ranking de productos entre dos fechas.")

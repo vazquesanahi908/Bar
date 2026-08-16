@@ -83,6 +83,13 @@ public class Pedido {
     @Column(length = 20)
     private String mesa;
 
+    // Marca cuándo se editó el pedido después de creado (agregar/sacar
+    // productos, cambiar cantidad, corregir datos del cliente). Null si
+    // nunca se tocó desde que se creó. Sirve para que Cocina vea que una
+    // comanda cambió después de haberla mirado, sin tener que revisarla
+    // manualmente cada vez (pedido silencioso reportado en QA).
+    private java.time.LocalDateTime modificadoEn;
+
     // Método de pago que eligió el cliente al hacer el pedido (referencia para
     // el cajero al cobrar; puede ser null y el cajero lo cambia si hace falta).
     @Enumerated(EnumType.STRING)

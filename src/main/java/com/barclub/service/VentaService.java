@@ -3,6 +3,7 @@ package com.barclub.service;
 import com.barclub.dto.VentaRequestDTO;
 import com.barclub.dto.VentaResponseDTO;
 import com.barclub.entity.ConfigLocal;
+import com.barclub.entity.CierreCaja;
 import com.barclub.entity.EstadoPedido;
 import com.barclub.entity.MetodoPago;
 import com.barclub.entity.Pedido;
@@ -34,6 +35,7 @@ public class VentaService {
     private final PedidoRepository pedidoRepository;
     private final ConfigLocalService configLocalService;
     private final com.barclub.websocket.RealtimeNotifier realtimeNotifier;
+    private final com.barclub.repository.CierreCajaRepository cierreCajaRepository;
 
     // ---- Registrar venta (cierra el pedido) ----
     public VentaResponseDTO registrar(VentaRequestDTO dto) {
@@ -171,7 +173,20 @@ public class VentaService {
                 .mapToDouble(v -> v.getTotal() != null ? v.getTotal() : 0.0).sum();
 
         ConfigLocal cfg = configLocalService.obtener();
-        String ahora = LocalDateTime.now().withNano(0).toString();
+        LocalDateTime momentoApertura = obtenerMomentoCierre(); // el cierre anterior = cuándo abrió esta caja
+        LocalDateTime ahoraDt = LocalDateTime.now().withNano(0);
+        String ahora = ahoraDt.toString();
+
+        // Guardar en el historial ANTES de pisar cierreCaja, así "Movimientos
+        // de hoy" puede seguir mostrando esta caja después de cerrada, en vez
+        // de que sus ventas "desaparezcan" de la vista (bug reportado en QA).
+        cierreCajaRepository.save(CierreCaja.builder()
+                .fechaApertura(momentoApertura != null ? momentoApertura : ahoraDt.toLocalDate().atStartOfDay())
+                .fechaCierre(ahoraDt)
+                .totalVentas(total)
+                .cantidadVentas(ventas.size())
+                .build());
+
         cfg.setCierreCaja(ahora);
         configLocalService.guardar(cfg);
 
@@ -180,6 +195,49 @@ public class VentaService {
         m.put("totalCerrado", total);
         m.put("cantidadVentas", ventas.size());
         return m;
+    }
+
+    // ---- Vista del día completo, separada por cada caja ----
+    // Resuelve la ambigüedad reportada en QA sobre qué mostrar cuando hay
+    // varias aperturas/cierres en un mismo día: se listan TODAS las cajas
+    // de ESE día (cerradas + la actualmente abierta si corresponde), cada
+    // una con su propio total, en vez de perder las ya cerradas. Funciona
+    // tanto para "hoy" como para cualquier fecha del historial.
+    @Transactional(readOnly = true)
+    public List<com.barclub.dto.SesionCajaDTO> sesionesDe(LocalDate fecha) {
+        List<com.barclub.dto.SesionCajaDTO> resultado = new ArrayList<>();
+
+        cierreCajaRepository.findByFechaCierreBetweenOrderByFechaCierreAsc(
+                        fecha.atStartOfDay(), fecha.atTime(LocalTime.MAX))
+                .forEach(c -> resultado.add(com.barclub.dto.SesionCajaDTO.builder()
+                        .apertura(c.getFechaApertura())
+                        .cierre(c.getFechaCierre())
+                        .total(c.getTotalVentas())
+                        .cantidadVentas(c.getCantidadVentas())
+                        .abierta(false)
+                        .build()));
+
+        // La caja actualmente abierta solo se agrega si estamos consultando
+        // el día de HOY (no tiene sentido mostrar "abierta" en una fecha
+        // pasada) y si efectivamente sigue abierta desde ese día o antes.
+        if (fecha.isEqual(LocalDate.now())) {
+            LocalDateTime momentoApertura = obtenerMomentoCierre();
+            boolean aperturaEsDeHoy = momentoApertura == null || !momentoApertura.toLocalDate().isBefore(fecha);
+            if (aperturaEsDeHoy) {
+                List<VentaResponseDTO> ventasAbierta = listarDesdeCierre();
+                double totalAbierta = ventasAbierta.stream()
+                        .mapToDouble(v -> v.getTotal() != null ? v.getTotal() : 0.0).sum();
+                resultado.add(com.barclub.dto.SesionCajaDTO.builder()
+                        .apertura(momentoApertura != null ? momentoApertura : fecha.atStartOfDay())
+                        .cierre(null)
+                        .total(totalAbierta)
+                        .cantidadVentas(ventasAbierta.size())
+                        .abierta(true)
+                        .build());
+            }
+        }
+
+        return resultado;
     }
 
     private LocalDateTime obtenerMomentoCierre() {

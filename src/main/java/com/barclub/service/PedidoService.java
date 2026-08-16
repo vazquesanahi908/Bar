@@ -343,6 +343,7 @@ public class PedidoService {
                         }
                 );
 
+        pedido.setModificadoEn(java.time.LocalDateTime.now());
         recalcularTotal(pedido);
         PedidoResponseDTO resultado = toDTO(pedidoRepository.save(pedido));
         realtimeNotifier.avisarPedidos();
@@ -371,6 +372,7 @@ public class PedidoService {
             detalle.setSubtotal(detalle.getPrecioUnitario() * nuevaCantidad);
         }
 
+        pedido.setModificadoEn(java.time.LocalDateTime.now());
         recalcularTotal(pedido);
         PedidoResponseDTO resultado = toDTO(pedidoRepository.save(pedido));
         realtimeNotifier.avisarPedidos();
@@ -394,6 +396,7 @@ public class PedidoService {
         if (dto.getDireccionEntrega() != null) pedido.setDireccionEntrega(dto.getDireccionEntrega());
         if (dto.getMesa() != null) pedido.setMesa(dto.getMesa());
 
+        pedido.setModificadoEn(java.time.LocalDateTime.now());
         logger.info("DATOS CLIENTE ACTUALIZADOS: pedidoId={}", pedidoId);
         PedidoResponseDTO resultado = toDTO(pedidoRepository.save(pedido));
         realtimeNotifier.avisarPedidos();
@@ -409,6 +412,7 @@ public class PedidoService {
         }
 
         pedido.getDetalles().removeIf(d -> d.getId().equals(detalleId));
+        pedido.setModificadoEn(java.time.LocalDateTime.now());
         recalcularTotal(pedido);
         PedidoResponseDTO resultado = toDTO(pedidoRepository.save(pedido));
         realtimeNotifier.avisarPedidos();
@@ -477,6 +481,7 @@ public class PedidoService {
                 .direccionEntrega(p.getDireccionEntrega())
                 .horarioEntrega(p.getHorarioEntrega())
                 .mesa(p.getMesa())
+                .modificadoEn(p.getModificadoEn())
                 .metodoPagoPreferido(p.getMetodoPagoPreferido())
                 .cliente(p.getCliente() != null ? clienteService.toDTO(p.getCliente()) : null)
                 .usuario(p.getUsuario() != null ? usuarioService.toDTO(p.getUsuario()) : null)

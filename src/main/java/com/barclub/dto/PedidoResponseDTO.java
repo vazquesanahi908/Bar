@@ -27,6 +27,7 @@ public class PedidoResponseDTO {
     private String telefonoCliente;
     private String direccionEntrega;
     private String mesa;
+    private java.time.LocalDateTime modificadoEn;
     private LocalTime horarioEntrega;
     private MetodoPago metodoPagoPreferido;
     private ClienteResponseDTO cliente;
