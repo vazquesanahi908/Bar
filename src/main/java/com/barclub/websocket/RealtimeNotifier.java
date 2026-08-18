@@ -49,10 +49,13 @@ public class RealtimeNotifier {
     }
 
     private void enviar(String destino, String tipo) {
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+        boolean transaccionActiva = TransactionSynchronizationManager.isSynchronizationActive();
+        log.info("AVISO EN TIEMPO REAL: solicitado para '{}' (transacción activa: {})", tipo, transaccionActiva);
+        if (transaccionActiva) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
+                    log.info("AVISO EN TIEMPO REAL: afterCommit disparado para '{}', enviando ahora", tipo);
                     enviarAhora(destino, tipo);
                 }
             });
@@ -64,6 +67,7 @@ public class RealtimeNotifier {
     private void enviarAhora(String destino, String tipo) {
         try {
             template.convertAndSend(destino, Map.of("tipo", tipo, "en", Instant.now().toString()));
+            log.info("AVISO EN TIEMPO REAL: enviado OK a {} (tipo={})", destino, tipo);
         } catch (Exception e) {
             log.warn("No se pudo enviar el aviso en tiempo real de '{}' (el polling de respaldo lo cubre igual): {}", tipo, e.getMessage());
         }
