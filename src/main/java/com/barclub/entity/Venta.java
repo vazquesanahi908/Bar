@@ -24,6 +24,16 @@ public class Venta {
     @Column(nullable = false)
     private LocalTime hora;
 
+    // A qué turno de trabajo pertenece esta venta, para agrupar y sumar
+    // "el día" de la forma en que el local realmente trabaja (una caja
+    // abierta a las 22:00 y cerrada a las 3am sigue siendo "esa noche", no
+    // dos días distintos). "fecha" arriba sigue siendo el dato real de
+    // cuándo pasó (para cualquier auditoría); "jornada" es la fecha de la
+    // caja bajo la que se cuenta, siempre la del momento en que ESA caja se
+    // abrió. Se calcula al registrar la venta, no cambia después.
+    @Column(columnDefinition = "DATE")
+    private LocalDate jornada;
+
     @Column(nullable = false)
     private Double total;
 

@@ -42,7 +42,7 @@ public class VentaController {
     @Operation(summary = "Ventas de hoy")
     @ApiResponse(responseCode = "200", description = "Ventas del día actual")
     public ResponseEntity<List<VentaResponseDTO>> listarDeHoy() {
-        return ResponseEntity.ok(ventaService.listarPorFecha(LocalDate.now()));
+        return ResponseEntity.ok(ventaService.listarPorFecha(ventaService.jornadaActual()));
     }
 
     @GetMapping("/fecha")
@@ -54,11 +54,11 @@ public class VentaController {
     }
 
     @GetMapping("/total")
-    @Operation(summary = "Total de ventas de un día", description = "Si no se especifica fecha, devuelve el total de hoy.")
+    @Operation(summary = "Total de ventas de un día", description = "Si no se especifica fecha, devuelve el total de la jornada actual.")
     @ApiResponse(responseCode = "200", description = "Total en pesos")
     public ResponseEntity<Double> totalDelDia(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha) {
-        LocalDate fechaConsulta = fecha != null ? fecha : LocalDate.now();
+        LocalDate fechaConsulta = fecha != null ? fecha : ventaService.jornadaActual();
         return ResponseEntity.ok(ventaService.totalDelDia(fechaConsulta));
     }
 
@@ -83,10 +83,10 @@ public class VentaController {
     }
 
     @DeleteMapping("/hoy")
-    @Operation(summary = "Eliminar todas las ventas de hoy")
+    @Operation(summary = "Eliminar todas las ventas de la jornada actual")
     @ApiResponse(responseCode = "204", description = "Ventas eliminadas")
     public ResponseEntity<Void> eliminarHoy() {
-        ventaService.eliminarPorFecha(LocalDate.now());
+        ventaService.eliminarPorFecha(ventaService.jornadaActual());
         return ResponseEntity.noContent().build();
     }
 
@@ -115,11 +115,11 @@ public class VentaController {
     }
 
     @GetMapping("/sesiones-hoy")
-    @Operation(summary = "Cajas de un día, cada una con su total", description = "Incluye todas las cajas cerradas ese día más la actualmente abierta (si corresponde y es hoy). Sin parámetro 'fecha', usa el día de hoy.")
-    @ApiResponse(responseCode = "200", description = "Lista de sesiones de caja del día")
+    @Operation(summary = "Cajas de una jornada, cada una con su total", description = "Incluye todas las cajas cerradas esa jornada más la actualmente abierta (si corresponde). Sin parámetro 'fecha', usa la jornada actual (que puede seguir siendo la de ayer si todavía no cruzó el próximo cierre de caja).")
+    @ApiResponse(responseCode = "200", description = "Lista de sesiones de caja de la jornada")
     public ResponseEntity<List<com.barclub.dto.SesionCajaDTO>> sesionesDeHoy(
             @RequestParam(required = false) java.time.LocalDate fecha) {
-        return ResponseEntity.ok(ventaService.sesionesDe(fecha != null ? fecha : java.time.LocalDate.now()));
+        return ResponseEntity.ok(ventaService.sesionesDe(fecha != null ? fecha : ventaService.jornadaActual()));
     }
 
     @GetMapping("/informe")
@@ -144,5 +144,13 @@ public class VentaController {
     @ApiResponse(responseCode = "200", description = "Resumen del cierre")
     public ResponseEntity<Map<String, Object>> cerrarCaja() {
         return ResponseEntity.ok(ventaService.cerrarCaja());
+    }
+
+    @PostMapping("/abrir-caja")
+    @Operation(summary = "Abrir la caja", description = "Habilita de nuevo el cobro de pedidos después de un cierre.")
+    @ApiResponse(responseCode = "200", description = "Caja abierta")
+    public ResponseEntity<Void> abrirCaja() {
+        ventaService.abrirCaja();
+        return ResponseEntity.ok().build();
     }
 }

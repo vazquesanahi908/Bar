@@ -94,6 +94,14 @@ public class ConfigLocal {
     // Momento del último cierre de caja (ISO datetime). Vacío = nunca se cerró.
     private String cierreCaja;
 
+    // Si la caja está actualmente abierta para cobrar. Empieza en true (el
+    // primer día no debería hacer falta abrirla a mano). Se pone en false al
+    // cerrar caja, y hay que abrirla de nuevo explícitamente antes de poder
+    // registrar otra venta — evita cobrar con la caja "cerrada" de la
+    // jornada anterior sin que nadie se dé cuenta.
+    @Builder.Default
+    private Boolean cajaAbierta = true;
+
     // Emails habilitados para acceso rápido en el login del panel admin
     // Guardados como JSON array: ["email1@x.com","email2@x.com"]
     @Column(length = 1000)

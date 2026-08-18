@@ -13,6 +13,9 @@ import com.barclub.exception.ResourceNotFoundException;
 import com.barclub.repository.PedidoRepository;
 import com.barclub.repository.VentaRepository;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,6 +42,17 @@ public class VentaService {
 
     // ---- Registrar venta (cierra el pedido) ----
     public VentaResponseDTO registrar(VentaRequestDTO dto) {
+        // La caja tiene que estar abierta para poder cobrar — si alguien
+        // cerró la caja y nadie la reabrió todavía, no debería poder entrar
+        // dinero "de la nada" sin quedar asociado a ninguna caja abierta.
+        // Boolean.FALSE.equals(...) en vez de !getCajaAbierta(): si el valor
+        // es null (caja de antes de que existiera este control), se trata
+        // como abierta, no como cerrada.
+        ConfigLocal cfgCaja = configLocalService.obtener();
+        if (Boolean.FALSE.equals(cfgCaja.getCajaAbierta())) {
+            throw new BusinessException("La caja está cerrada. Abrila antes de cobrar.");
+        }
+
         Pedido pedido = pedidoRepository.findById(dto.getPedidoId())
                 .orElseThrow(() -> new ResourceNotFoundException("Pedido", dto.getPedidoId()));
 
@@ -61,6 +75,7 @@ public class VentaService {
         Venta venta = Venta.builder()
                 .fecha(LocalDate.now())
                 .hora(LocalTime.now())
+                .jornada(jornadaActual())
                 .total(pedido.getTotal())
                 .metodoPago(dto.getMetodoPago())
                 .pedido(pedido)
@@ -86,19 +101,19 @@ public class VentaService {
                 .collect(Collectors.toList());
     }
 
-    // ---- Ventas del día ----
+    // ---- Ventas de una jornada (un "día de trabajo": ver Venta.jornada) ----
     @Transactional(readOnly = true)
-    public List<VentaResponseDTO> listarPorFecha(LocalDate fecha) {
-        return ventaRepository.findByFecha(fecha)
+    public List<VentaResponseDTO> listarPorFecha(LocalDate jornada) {
+        return ventaRepository.findByJornada(jornada)
                 .stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
     }
 
-    // ---- Total del día ----
+    // ---- Total de una jornada ----
     @Transactional(readOnly = true)
-    public Double totalDelDia(LocalDate fecha) {
-        return ventaRepository.sumTotalByFecha(fecha);
+    public Double totalDelDia(LocalDate jornada) {
+        return ventaRepository.sumTotalByJornada(jornada);
     }
 
     // ---- Informes por período ----
@@ -163,7 +178,10 @@ public class VentaService {
     @Transactional(readOnly = true)
     public Map<String, Object> estadoCaja() {
         Map<String, Object> m = new HashMap<>();
-        m.put("abiertaDesde", configLocalService.obtener().getCierreCaja());
+        ConfigLocal cfg = configLocalService.obtener();
+        m.put("abiertaDesde", cfg.getCierreCaja());
+        // null (cajas de antes de este control) se informa como abierta = true.
+        m.put("abierta", !Boolean.FALSE.equals(cfg.getCajaAbierta()));
         return m;
     }
 
@@ -188,6 +206,7 @@ public class VentaService {
                 .build());
 
         cfg.setCierreCaja(ahora);
+        cfg.setCajaAbierta(false);
         configLocalService.guardar(cfg);
 
         Map<String, Object> m = new HashMap<>();
@@ -197,6 +216,16 @@ public class VentaService {
         return m;
     }
 
+    // ---- Abrir una nueva caja (después de haber cerrado la anterior) ----
+    // No hace falta tocar cierreCaja acá: ese valor ya marca "desde cuándo
+    // se cuenta la caja actual" (quedó seteado en el último cierre). Abrir
+    // caja solo habilita de nuevo el cobro.
+    public void abrirCaja() {
+        ConfigLocal cfg = configLocalService.obtener();
+        cfg.setCajaAbierta(true);
+        configLocalService.guardar(cfg);
+    }
+
     // ---- Vista del día completo, separada por cada caja ----
     // Resuelve la ambigüedad reportada en QA sobre qué mostrar cuando hay
     // varias aperturas/cierres en un mismo día: se listan TODAS las cajas
@@ -204,11 +233,11 @@ public class VentaService {
     // una con su propio total, en vez de perder las ya cerradas. Funciona
     // tanto para "hoy" como para cualquier fecha del historial.
     @Transactional(readOnly = true)
-    public List<com.barclub.dto.SesionCajaDTO> sesionesDe(LocalDate fecha) {
+    public List<com.barclub.dto.SesionCajaDTO> sesionesDe(LocalDate jornada) {
         List<com.barclub.dto.SesionCajaDTO> resultado = new ArrayList<>();
 
-        cierreCajaRepository.findByFechaCierreBetweenOrderByFechaCierreAsc(
-                        fecha.atStartOfDay(), fecha.atTime(LocalTime.MAX))
+        cierreCajaRepository.findByFechaAperturaBetweenOrderByFechaAperturaAsc(
+                        jornada.atStartOfDay(), jornada.atTime(LocalTime.MAX))
                 .forEach(c -> resultado.add(com.barclub.dto.SesionCajaDTO.builder()
                         .apertura(c.getFechaApertura())
                         .cierre(c.getFechaCierre())
@@ -217,22 +246,41 @@ public class VentaService {
                         .abierta(false)
                         .build()));
 
-        // La caja actualmente abierta solo se agrega si estamos consultando
-        // el día de HOY (no tiene sentido mostrar "abierta" en una fecha
-        // pasada) y si efectivamente sigue abierta desde ese día o antes.
-        if (fecha.isEqual(LocalDate.now())) {
+        // La caja actualmente abierta se agrega si la jornada consultada es
+        // la que está corriendo AHORA (que no es necesariamente "hoy" según
+        // el calendario — si son las 2am y la caja se abrió anoche, la
+        // jornada actual sigue siendo la de ayer).
+        if (jornada.isEqual(jornadaActual())) {
             LocalDateTime momentoApertura = obtenerMomentoCierre();
-            boolean aperturaEsDeHoy = momentoApertura == null || !momentoApertura.toLocalDate().isBefore(fecha);
-            if (aperturaEsDeHoy) {
-                List<VentaResponseDTO> ventasAbierta = listarDesdeCierre();
-                double totalAbierta = ventasAbierta.stream()
+            List<VentaResponseDTO> ventasAbierta = listarDesdeCierre();
+            double totalAbierta = ventasAbierta.stream()
+                    .mapToDouble(v -> v.getTotal() != null ? v.getTotal() : 0.0).sum();
+            resultado.add(com.barclub.dto.SesionCajaDTO.builder()
+                    .apertura(momentoApertura != null ? momentoApertura : jornada.atStartOfDay())
+                    .cierre(null)
+                    .total(totalAbierta)
+                    .cantidadVentas(ventasAbierta.size())
+                    .abierta(true)
+                    .build());
+        }
+
+        // Si no encontramos ninguna caja registrada para esa jornada (fechas
+        // de antes de que este historial existiera) pero SÍ hubo ventas,
+        // armamos una sola tarjeta "sintética" con todo el día junto — así
+        // el diseño se ve igual de prolijo en vez de que la sección
+        // desaparezca del todo para fechas viejas (bug reportado en QA).
+        // No tiene horario de apertura/cierre real porque nunca se registró.
+        if (resultado.isEmpty()) {
+            List<VentaResponseDTO> ventasDia = listarPorFecha(jornada);
+            if (!ventasDia.isEmpty()) {
+                double totalDia = ventasDia.stream()
                         .mapToDouble(v -> v.getTotal() != null ? v.getTotal() : 0.0).sum();
                 resultado.add(com.barclub.dto.SesionCajaDTO.builder()
-                        .apertura(momentoApertura != null ? momentoApertura : fecha.atStartOfDay())
+                        .apertura(null)
                         .cierre(null)
-                        .total(totalAbierta)
-                        .cantidadVentas(ventasAbierta.size())
-                        .abierta(true)
+                        .total(totalDia)
+                        .cantidadVentas(ventasDia.size())
+                        .abierta(false)
                         .build());
             }
         }
@@ -250,6 +298,17 @@ public class VentaService {
         }
     }
 
+    // ---- Jornada actual (el "día de trabajo" que está corriendo ahora) ----
+    // Es la fecha calendario en que se abrió la caja actualmente abierta —
+    // no la fecha de hoy. Así, una caja abierta a las 22:00 y todavía
+    // corriendo a las 3am sigue contando como la noche de ayer, en vez de
+    // que a medianoche el sistema "salte" solo a un día nuevo en medio del
+    // turno (el problema real que motivó todo esto).
+    public LocalDate jornadaActual() {
+        LocalDateTime momentoApertura = obtenerMomentoCierre();
+        return momentoApertura != null ? momentoApertura.toLocalDate() : LocalDate.now();
+    }
+
     // ---- Obtener por id ----
     @Transactional(readOnly = true)
     public VentaResponseDTO obtenerPorId(Long id) {
@@ -258,8 +317,8 @@ public class VentaService {
     }
 
     // ---- Eliminar ventas de una fecha (borrado definitivo) ----
-    public void eliminarPorFecha(LocalDate fecha) {
-        List<Venta> ventas = ventaRepository.findByFecha(fecha);
+    public void eliminarPorFecha(LocalDate jornada) {
+        List<Venta> ventas = ventaRepository.findByJornada(jornada);
         // Si se borra la venta, el pedido que quedó marcado como ENTREGADO por
         // ese cobro debe volver a un estado utilizable (LISTO). Si no, ese
         // pedido queda invisible para siempre: no aparece en "Pedidos activos"

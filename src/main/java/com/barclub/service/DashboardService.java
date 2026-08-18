@@ -23,8 +23,8 @@ public class DashboardService {
     private final ReservaRepository reservaRepository;
 
     public ResumenDiaDTO resumenDelDia(LocalDate fecha) {
-        Double totalVentas = ventaRepository.sumTotalByFecha(fecha);
-        Long cantidadPedidos = ventaRepository.countByFecha(fecha);
+        Double totalVentas = ventaRepository.sumTotalByJornada(fecha);
+        Long cantidadPedidos = ventaRepository.countByJornada(fecha);
 
         List<com.barclub.entity.Pedido> activos = pedidoRepository.findPedidosActivos();
         long pedidosActivos = activos.size();

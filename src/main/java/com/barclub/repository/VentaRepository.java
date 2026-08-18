@@ -15,15 +15,20 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
 
     List<Venta> findByFecha(LocalDate fecha);
 
+    // "jornada" agrupa por turno de trabajo real (ver Venta.jornada), no por
+    // fecha de calendario — así una caja que cruza la medianoche cuenta
+    // entera para una sola noche en vez de partirse en dos días.
+    List<Venta> findByJornada(LocalDate jornada);
+
     Optional<Venta> findByPedidoId(Long pedidoId);
 
     List<Venta> findByMetodoPago(MetodoPago metodoPago);
 
-    @Query("SELECT COALESCE(SUM(v.total), 0) FROM Venta v WHERE v.fecha = :fecha")
-    Double sumTotalByFecha(LocalDate fecha);
+    @Query("SELECT COALESCE(SUM(v.total), 0) FROM Venta v WHERE v.jornada = :jornada")
+    Double sumTotalByJornada(LocalDate jornada);
 
-    @Query("SELECT COUNT(v) FROM Venta v WHERE v.fecha = :fecha")
-    Long countByFecha(LocalDate fecha);
+    @Query("SELECT COUNT(v) FROM Venta v WHERE v.jornada = :jornada")
+    Long countByJornada(LocalDate jornada);
 
     // ==================== INFORMES POR PERÍODO ====================
 
