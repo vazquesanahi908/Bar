@@ -29,7 +29,12 @@ public class PedidoRequestDTO {
     private String telefonoCliente;
     @Size(max = 200, message = "La dirección no puede superar los 200 caracteres")
     private String direccionEntrega;
-    @JsonFormat(pattern = "HH:mm:ss")
+    // Sin @JsonFormat acá a propósito: es lo que MANDA el cliente, y el
+    // frontend público envía la hora sin segundos ("21:00"), no "21:00:00".
+    // El formato estricto solo hace falta en las respuestas (para que
+    // siempre salga igual), nunca en lo que se recibe — si no, Jackson
+    // rechaza cualquier hora que no tenga los segundos exactos, con un
+    // error 500 al confirmar el pedido (esto pasó de verdad, bug real).
     private LocalTime horarioEntrega;
 
     // Nº de mesa (pedidos en salón)
