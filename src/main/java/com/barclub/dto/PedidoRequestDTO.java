@@ -2,6 +2,7 @@ package com.barclub.dto;
 
 import com.barclub.entity.TipoPedido;
 import com.barclub.entity.MetodoPago;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -28,6 +29,7 @@ public class PedidoRequestDTO {
     private String telefonoCliente;
     @Size(max = 200, message = "La dirección no puede superar los 200 caracteres")
     private String direccionEntrega;
+    @JsonFormat(pattern = "HH:mm:ss")
     private LocalTime horarioEntrega;
 
     // Nº de mesa (pedidos en salón)

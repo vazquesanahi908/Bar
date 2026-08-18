@@ -17,6 +17,7 @@ public class VentaResponseDTO {
     private Long id;
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate fecha;
+    @JsonFormat(pattern = "HH:mm:ss")
     private LocalTime hora;
     private Double total;
     private MetodoPago metodoPago;

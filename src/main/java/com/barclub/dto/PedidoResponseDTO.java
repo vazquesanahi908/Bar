@@ -20,6 +20,7 @@ public class PedidoResponseDTO {
     private Long id;
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate fecha;
+    @JsonFormat(pattern = "HH:mm:ss")
     private LocalTime hora;
     private EstadoPedido estado;
     private TipoPedido tipo;
@@ -30,6 +31,7 @@ public class PedidoResponseDTO {
     private String direccionEntrega;
     private String mesa;
     private java.time.LocalDateTime modificadoEn;
+    @JsonFormat(pattern = "HH:mm:ss")
     private LocalTime horarioEntrega;
     private MetodoPago metodoPagoPreferido;
     private ClienteResponseDTO cliente;

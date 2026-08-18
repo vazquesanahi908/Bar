@@ -25,6 +25,7 @@ public class ReservaResponseDTO {
     // datos tiene la fecha correcta, pero el panel la mostraba un día antes.
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate fecha;
+    @JsonFormat(pattern = "HH:mm:ss")
     private LocalTime hora;
     private Integer cantidadPersonas;
     private String telefono;
