@@ -275,19 +275,26 @@ public class VentaService {
         // el diseño se ve igual de prolijo en vez de que la sección
         // desaparezca del todo para fechas viejas (bug reportado en QA).
         // No tiene horario de apertura/cierre real porque nunca se registró.
-        if (resultado.isEmpty()) {
-            List<VentaResponseDTO> ventasDia = listarPorFecha(jornada);
-            if (!ventasDia.isEmpty()) {
-                double totalDia = ventasDia.stream()
-                        .mapToDouble(v -> v.getTotal() != null ? v.getTotal() : 0.0).sum();
-                resultado.add(com.barclub.dto.SesionCajaDTO.builder()
-                        .apertura(null)
-                        .cierre(null)
-                        .total(totalDia)
-                        .cantidadVentas(ventasDia.size())
-                        .abierta(false)
-                        .build());
-            }
+        //
+        // Además: puede pasar que haya ventas con esta jornada que NINGUNA
+        // de las tarjetas de arriba cuenta (por ejemplo, si cayeron dentro
+        // de una caja que en realidad abrió otro día — quedaban "sueltas",
+        // sin aparecer en ningún lado, aunque el resumen de la derecha sí
+        // las contaba). Se comparan los totales y, si falta gente, se
+        // agrega una tarjeta aparte con lo que falte.
+        int yaContadas = resultado.stream().mapToInt(com.barclub.dto.SesionCajaDTO::getCantidadVentas).sum();
+        List<VentaResponseDTO> ventasDeLaJornada = listarPorFecha(jornada);
+        if (ventasDeLaJornada.size() > yaContadas) {
+            double totalSuelto = ventasDeLaJornada.stream()
+                    .mapToDouble(v -> v.getTotal() != null ? v.getTotal() : 0.0).sum()
+                    - resultado.stream().mapToDouble(com.barclub.dto.SesionCajaDTO::getTotal).sum();
+            resultado.add(com.barclub.dto.SesionCajaDTO.builder()
+                    .apertura(null)
+                    .cierre(null)
+                    .total(Math.max(totalSuelto, 0))
+                    .cantidadVentas(ventasDeLaJornada.size() - yaContadas)
+                    .abierta(false)
+                    .build());
         }
 
         return resultado;
