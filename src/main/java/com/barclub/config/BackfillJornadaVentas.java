@@ -4,6 +4,7 @@ import com.barclub.entity.CierreCaja;
 import com.barclub.entity.Venta;
 import com.barclub.repository.CierreCajaRepository;
 import com.barclub.repository.VentaRepository;
+import com.barclub.service.VentaService;
 import jakarta.annotation.PostConstruct;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -14,14 +15,15 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Las ventas registradas ANTES de que existiera el campo "jornada" (ver
- * Venta.jornada) quedaron con ese valor vacío en la base. Como ahora todo lo
- * que agrupa "por día" (Resumen por medio de pago, detalle de cada caja,
- * etc.) se apoya en ese campo, esas ventas viejas quedaban invisibles ahí
- * aunque siguieran contando en el resumen de la caja (que se había guardado
- * aparte, en su momento). Esto corre una sola vez al arrancar el servidor y
- * les asigna la jornada que les corresponde según en qué caja cayeron —
- * después de la primera vez no encuentra nada para arreglar y no hace nada.
+ * Corrige la jornada de las ventas al arrancar el servidor — tanto las que
+ * quedaron vacías (ventas de antes de que ese campo existiera) como las que
+ * quedaron mal calculadas por versiones anteriores de la lógica (por
+ * ejemplo, antes de poner el límite de 24hs a cuánto puede "durar" una
+ * caja abierta contando para el mismo día — una caja olvidada abierta
+ * varios días mezclaba ventas de días distintos en una sola jornada).
+ * Recalcula TODAS las ventas cada vez que arranca (no solo las vacías),
+ * así que es un arreglo que se auto-corrige solo si en el futuro cambia la
+ * lógica de nuevo — no hace falta acordarse de correr nada a mano.
  */
 @Component
 public class BackfillJornadaVentas {
@@ -30,42 +32,44 @@ public class BackfillJornadaVentas {
 
     private final VentaRepository ventaRepository;
     private final CierreCajaRepository cierreCajaRepository;
+    private final VentaService ventaService;
 
-    public BackfillJornadaVentas(VentaRepository ventaRepository, CierreCajaRepository cierreCajaRepository) {
+    public BackfillJornadaVentas(VentaRepository ventaRepository, CierreCajaRepository cierreCajaRepository, VentaService ventaService) {
         this.ventaRepository = ventaRepository;
         this.cierreCajaRepository = cierreCajaRepository;
+        this.ventaService = ventaService;
     }
 
     @PostConstruct
     @Transactional
     public void rellenar() {
-        List<Venta> sinJornada = ventaRepository.findAll().stream()
-                .filter(v -> v.getJornada() == null)
-                .toList();
-        if (sinJornada.isEmpty()) return;
+        List<Venta> todas = ventaRepository.findAll();
+        if (todas.isEmpty()) return;
 
         List<CierreCaja> cajas = cierreCajaRepository.findAll();
         int corregidas = 0;
-        for (Venta v : sinJornada) {
+        for (Venta v : todas) {
             if (v.getFecha() == null || v.getHora() == null) continue;
             LocalDateTime momento = LocalDateTime.of(v.getFecha(), v.getHora());
 
-            // Buscar en qué caja cayó esta venta (apertura <= momento < cierre)
-            // y usar la fecha en que ESA caja se abrió como jornada.
-            LocalDate jornada = cajas.stream()
+            // Buscar en qué caja cayó esta venta (apertura <= momento < cierre).
+            LocalDateTime aperturaDeSuCaja = cajas.stream()
                     .filter(c -> c.getFechaApertura() != null && c.getFechaCierre() != null)
                     .filter(c -> !momento.isBefore(c.getFechaApertura()) && momento.isBefore(c.getFechaCierre()))
-                    .map(c -> c.getFechaApertura().toLocalDate())
+                    .map(CierreCaja::getFechaApertura)
                     .findFirst()
-                    // Si no cayó en ninguna caja conocida (dato muy viejo, de
-                    // antes de que existiera el historial de cajas), se usa
-                    // directamente su propia fecha como mejor estimación.
-                    .orElse(v.getFecha());
+                    .orElse(null);
 
-            v.setJornada(jornada);
-            corregidas++;
+            LocalDate jornadaCorrecta = ventaService.calcularJornada(momento, aperturaDeSuCaja);
+
+            if (!jornadaCorrecta.equals(v.getJornada())) {
+                v.setJornada(jornadaCorrecta);
+                corregidas++;
+            }
         }
-        ventaRepository.saveAll(sinJornada);
-        log.info("BackfillJornadaVentas: se completó la jornada de {} venta(s) vieja(s).", corregidas);
+        if (corregidas > 0) {
+            ventaRepository.saveAll(todas);
+        }
+        log.info("BackfillJornadaVentas: se corrigió la jornada de {} venta(s) (de {} revisadas).", corregidas, todas.size());
     }
 }

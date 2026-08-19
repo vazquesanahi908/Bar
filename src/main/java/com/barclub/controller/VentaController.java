@@ -148,9 +148,9 @@ public class VentaController {
 
     @PostMapping("/abrir-caja")
     @Operation(summary = "Abrir la caja", description = "Habilita de nuevo el cobro de pedidos después de un cierre.")
-    @ApiResponse(responseCode = "200", description = "Caja abierta")
+    @ApiResponse(responseCode = "204", description = "Caja abierta")
     public ResponseEntity<Void> abrirCaja() {
         ventaService.abrirCaja();
-        return ResponseEntity.ok().build();
+        return ResponseEntity.noContent().build();
     }
 }

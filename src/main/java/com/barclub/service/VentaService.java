@@ -249,8 +249,13 @@ public class VentaService {
         // La caja actualmente abierta se agrega si la jornada consultada es
         // la que está corriendo AHORA (que no es necesariamente "hoy" según
         // el calendario — si son las 2am y la caja se abrió anoche, la
-        // jornada actual sigue siendo la de ayer).
-        if (jornada.isEqual(jornadaActual())) {
+        // jornada actual sigue siendo la de ayer) Y ADEMÁS la caja
+        // efectivamente sigue abierta — antes solo se chequeaba lo primero,
+        // así que apenas se cerraba la caja igual seguía apareciendo acá
+        // como "abierta" (bug real reportado en QA: el estado de arriba
+        // decía "Cerrada" pero Movimientos mostraba una caja abierta).
+        boolean cajaRealmenteAbierta = !Boolean.FALSE.equals(configLocalService.obtener().getCajaAbierta());
+        if (cajaRealmenteAbierta && jornada.isEqual(jornadaActual())) {
             LocalDateTime momentoApertura = obtenerMomentoCierre();
             List<VentaResponseDTO> ventasAbierta = listarDesdeCierre();
             double totalAbierta = ventasAbierta.stream()
@@ -305,8 +310,24 @@ public class VentaService {
     // que a medianoche el sistema "salte" solo a un día nuevo en medio del
     // turno (el problema real que motivó todo esto).
     public LocalDate jornadaActual() {
-        LocalDateTime momentoApertura = obtenerMomentoCierre();
-        return momentoApertura != null ? momentoApertura.toLocalDate() : LocalDate.now();
+        return calcularJornada(LocalDateTime.now(), obtenerMomentoCierre());
+    }
+
+    // Une el momento real de una venta con la apertura de la caja bajo la
+    // que cae, con un límite de 24 horas: si la caja lleva abierta más de
+    // eso (alguien se olvidó de cerrarla, no es una noche cruzando la
+    // medianoche), ya no tiene sentido seguir pegando todo al día en que
+    // abrió — pasa a contar como el día real en que pasó. Sin este límite,
+    // una caja olvidada abierta varios días mezclaba ventas de días
+    // distintos en una sola jornada (bug real: una venta del 18 quedó
+    // guardada con jornada 16, porque la caja seguía "abierta" desde ahí).
+    public LocalDate calcularJornada(LocalDateTime momentoVenta, LocalDateTime aperturaCaja) {
+        if (aperturaCaja != null
+                && !momentoVenta.isBefore(aperturaCaja)
+                && momentoVenta.isBefore(aperturaCaja.plusHours(24))) {
+            return aperturaCaja.toLocalDate();
+        }
+        return momentoVenta.toLocalDate();
     }
 
     // ---- Obtener por id ----
