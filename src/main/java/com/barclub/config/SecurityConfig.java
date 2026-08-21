@@ -46,20 +46,15 @@ public class SecurityConfig {
                 // sensibles, solo un aviso de "algo cambió" (ver RealtimeNotifier),
                 // así que no necesita requerir sesión para el handshake.
                 .requestMatchers("/ws/**").permitAll()
+                // Endpoint de solo prueba del canal en tiempo real (ver
+                // DevTestController) — no expone datos, solo reenvía una
+                // señal vacía. Se puede borrar junto con ese controller.
                 // Swagger: solo ADMIN (no exponer el mapa de la API al público)
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").hasRole("ADMIN")
 
-                // Cambiar la propia contraseña: cualquier usuario logueado (no
-                // solo ADMIN), porque cualquier rol puede haber quedado con la
-                // contraseña de fábrica. Va ANTES de la regla general de
-                // "/api/usuarios/**" (solo ADMIN) para que la pise.
-                .requestMatchers(HttpMethod.PATCH, "/api/usuarios/me/password").authenticated()
-
                 // ── SOLO ADMIN: administración del sistema ──────────────────
-                // Gestión de usuarios, configuración del local, backups y
-                // puesta a punto de una instalación nueva para un cliente.
+                // Gestión de usuarios, configuración del local y backups.
                 .requestMatchers("/api/usuarios/**").hasRole("ADMIN")
-                .requestMatchers("/api/setup/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.PUT,    "/api/config/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.POST,   "/api/config/**").hasRole("ADMIN")
                 .requestMatchers("/api/backups/**").hasRole("ADMIN")

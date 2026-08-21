@@ -36,12 +36,10 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
     @Query("SELECT v FROM Venta v WHERE v.fecha BETWEEN :desde AND :hasta ORDER BY v.fecha DESC, v.hora DESC")
     List<Venta> findEntreFechas(LocalDate desde, LocalDate hasta);
 
-    /** [nombre, categoría, unidades, ingreso] por producto en el período, del más vendido al menos.
-     *  Excluye renglones que se sacaron del pedido (soft delete): esos productos no se
-     *  llegaron a vender de verdad y no deben contarse en el ranking ni en los ingresos. */
+    /** [nombre, categoría, unidades, ingreso] por producto en el período, del más vendido al menos. */
     @Query("SELECT pr.nombre, pr.categoria, SUM(d.cantidad), SUM(d.subtotal) " +
            "FROM Venta v JOIN v.pedido p JOIN p.detalles d JOIN d.producto pr " +
-           "WHERE v.fecha BETWEEN :desde AND :hasta AND (d.eliminado IS NULL OR d.eliminado = false) " +
+           "WHERE v.fecha BETWEEN :desde AND :hasta " +
            "GROUP BY pr.id, pr.nombre, pr.categoria ORDER BY SUM(d.cantidad) DESC")
     List<Object[]> rankingProductos(LocalDate desde, LocalDate hasta);
 

@@ -90,6 +90,16 @@ public class Pedido {
     // manualmente cada vez (pedido silencioso reportado en QA).
     private java.time.LocalDateTime modificadoEn;
 
+    // Foto (snapshot) de los productos del pedido justo ANTES de la primera
+    // edición del ciclo de cambios actual (JSON simple: [{nombre,variante,
+    // cantidad}]). Se guarda solo la primera vez que se toca el pedido desde
+    // que quedó "limpio" (createado o pasado a LISTO), así Cocina puede
+    // comparar contra el pedido original y mostrar qué cambió (plato sacado
+    // tachado, plato nuevo en verde, etc.) hasta que el pedido pase a LISTO,
+    // momento en el que se limpia junto con modificadoEn.
+    @Column(columnDefinition = "TEXT")
+    private String detalleSnapshotAntesEdicion;
+
     // Método de pago que eligió el cliente al hacer el pedido (referencia para
     // el cajero al cobrar; puede ser null y el cajero lo cambia si hace falta).
     @Enumerated(EnumType.STRING)

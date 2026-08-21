@@ -47,6 +47,30 @@ public class PedidoService {
     private final ClienteService clienteService;
     private final UsuarioService usuarioService;
     private final com.barclub.websocket.RealtimeNotifier realtimeNotifier;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+
+    // ---- Foto de los detalles ANTES de editar (para que Cocina vea el diff) ----
+    // Se guarda una sola vez por "ciclo de edición": la primera vez que se toca
+    // el pedido desde que quedó limpio (recién creado, o recién pasado a LISTO).
+    // Si ya había una foto tomada en este ciclo, no se pisa.
+    private void capturarSnapshotSiHaceFalta(Pedido pedido) {
+        if (pedido.getModificadoEn() != null) return; // ya hay una edición en curso en este ciclo
+        try {
+            List<java.util.Map<String, Object>> snap = pedido.getDetalles().stream()
+                    .map(d -> {
+                        java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
+                        m.put("nombre", d.getProducto() != null ? d.getProducto().getNombre() : null);
+                        m.put("categoria", d.getProducto() != null ? d.getProducto().getCategoria() : null);
+                        m.put("variante", d.getVariante());
+                        m.put("cantidad", d.getCantidad());
+                        return m;
+                    })
+                    .collect(Collectors.toList());
+            pedido.setDetalleSnapshotAntesEdicion(objectMapper.writeValueAsString(snap));
+        } catch (Exception e) {
+            logger.warn("No se pudo generar la foto de detalles antes de editar el pedido {}: {}", pedido.getId(), e.getMessage());
+        }
+    }
 
     @Transactional(readOnly = true)
     public List<PedidoResponseDTO> listarTodos() {
@@ -193,8 +217,6 @@ public class PedidoService {
                     .pedido(pedidoGuardado)
                     .producto(producto)
                     .cantidad(detalleDTO.getCantidad())
-                    // Parte del pedido desde que se creó: no es "nuevo" para Cocina.
-                    .cantidadOriginal(detalleDTO.getCantidad())
                     .variante(variante != null && !variante.isBlank() ? variante.trim() : null)
                     .precioUnitario(precioUnit)
                     .costoUnitario(producto.getCosto())
@@ -251,6 +273,13 @@ public class PedidoService {
         pedido.setEstado(nuevoEstado);
         if (nuevoEstado == EstadoPedido.ENTREGADO && pedido.getEntregadoEn() == null) {
             pedido.setEntregadoEn(java.time.LocalDateTime.now());
+        }
+        // Al pasar a LISTO, Cocina ya vio y resolvió cualquier cambio pendiente:
+        // se limpia la marca de "modificado" y la foto de diff, así el próximo
+        // ciclo de edición (si el pedido vuelve a tocarse) arranca de cero.
+        if (nuevoEstado == EstadoPedido.LISTO) {
+            pedido.setModificadoEn(null);
+            pedido.setDetalleSnapshotAntesEdicion(null);
         }
         logger.info("ESTADO PEDIDO: id={} -> {} -> {}", id, estadoAnterior, nuevoEstado);
         PedidoResponseDTO resultado = toDTO(pedidoRepository.save(pedido));
@@ -336,16 +365,15 @@ public class PedidoService {
         logger.info("AGREGAR DETALLE: pedidoId={}, productoId={}, variante={}, cantidad={}",
                 pedidoId, detalleDTO.getProductoId(), variante, detalleDTO.getCantidad());
 
+        capturarSnapshotSiHaceFalta(pedido);
+
         // Fusiona con un detalle ya cargado solo si es el MISMO producto Y
-        // la MISMA variante Y sigue activo — antes fusionaba por producto
-        // nomás, así que "Fugazzeta Media" y "Fugazzeta Entera" se mezclaban
-        // en una sola línea con la cantidad sumada, perdiendo cuál era cuál.
-        // Se excluyen los renglones ya eliminados (soft delete) para no
-        // "resucitar" en silencio un producto que se había sacado del pedido.
+        // la MISMA variante — antes fusionaba por producto nomás, así que
+        // "Fugazzeta Media" y "Fugazzeta Entera" se mezclaban en una sola
+        // línea con la cantidad sumada, perdiendo cuál era cuál.
         pedido.getDetalles().stream()
                 .filter(d -> d.getProducto() != null && d.getProducto().getId().equals(producto.getId())
-                        && java.util.Objects.equals(d.getVariante(), variante)
-                        && !Boolean.TRUE.equals(d.getEliminado()))
+                        && java.util.Objects.equals(d.getVariante(), variante))
                 .findFirst()
                 .ifPresentOrElse(
                         detalle -> {
@@ -357,9 +385,6 @@ public class PedidoService {
                                     .pedido(pedido)
                                     .producto(producto)
                                     .cantidad(detalleDTO.getCantidad())
-                                    // Sin cantidadOriginal explícito: queda en el default (0),
-                                    // la señal de que Cocina lo tiene que mostrar como NUEVO
-                                    // porque no estaba en el pedido original.
                                     .variante(variante)
                                     .precioUnitario(precio)
                                     .subtotal(precio * detalleDTO.getCantidad())
@@ -376,13 +401,8 @@ public class PedidoService {
     }
 
     // ---- Cambiar la cantidad de un producto ya cargado en el pedido ----
-    // Si la nueva cantidad es 0 o menos, se saca el producto del pedido
-    // (mismo resultado que eliminarDetalle): NO se borra la fila, se marca
-    // "eliminado" (soft delete) para que Cocina pueda seguir viendo qué se
-    // sacó del pedido de forma durable, sin importar cuánto tiempo pase ni
-    // cuántas veces se recargue la pantalla. Una vez que el pedido pasa a
-    // LISTO deja de listarse en Cocina (/pedidos/activos ya no lo incluye),
-    // así que el marcado deja de tener efecto solo, sin necesitar limpieza.
+    // Si la nueva cantidad es 0 o menos, directamente se saca el producto
+    // del pedido (mismo resultado que eliminarDetalle).
     public PedidoResponseDTO cambiarCantidadDetalle(Long pedidoId, Long detalleId, int nuevaCantidad) {
         Pedido pedido = pedidoRepository.findById(pedidoId)
                 .orElseThrow(() -> new ResourceNotFoundException("Pedido", pedidoId));
@@ -391,14 +411,15 @@ public class PedidoService {
             throw new BusinessException("Solo se pueden modificar pedidos en estado PENDIENTE o PREPARACION");
         }
 
-        DetallePedido detalle = pedido.getDetalles().stream()
-                .filter(d -> d.getId().equals(detalleId) && !Boolean.TRUE.equals(d.getEliminado()))
-                .findFirst()
-                .orElseThrow(() -> new ResourceNotFoundException("Detalle de pedido", detalleId));
+        capturarSnapshotSiHaceFalta(pedido);
 
         if (nuevaCantidad <= 0) {
-            detalle.setEliminado(true);
+            pedido.getDetalles().removeIf(d -> d.getId().equals(detalleId));
         } else {
+            DetallePedido detalle = pedido.getDetalles().stream()
+                    .filter(d -> d.getId().equals(detalleId))
+                    .findFirst()
+                    .orElseThrow(() -> new ResourceNotFoundException("Detalle de pedido", detalleId));
             detalle.setCantidad(nuevaCantidad);
             detalle.setSubtotal(detalle.getPrecioUnitario() * nuevaCantidad);
         }
@@ -442,12 +463,8 @@ public class PedidoService {
             throw new BusinessException("Solo se pueden modificar pedidos en estado PENDIENTE o PREPARACION");
         }
 
-        // Soft delete (ver comentario en cambiarCantidadDetalle): se conserva la
-        // fila marcada "eliminado" para que Cocina la siga viendo tachada.
-        pedido.getDetalles().stream()
-                .filter(d -> d.getId().equals(detalleId) && !Boolean.TRUE.equals(d.getEliminado()))
-                .findFirst()
-                .ifPresent(d -> d.setEliminado(true));
+        capturarSnapshotSiHaceFalta(pedido);
+        pedido.getDetalles().removeIf(d -> d.getId().equals(detalleId));
         pedido.setModificadoEn(java.time.LocalDateTime.now());
         recalcularTotal(pedido);
         PedidoResponseDTO resultado = toDTO(pedidoRepository.save(pedido));
@@ -456,9 +473,7 @@ public class PedidoService {
     }
 
     private void recalcularTotal(Pedido pedido) {
-        double total = pedido.getDetalles().stream()
-                .filter(d -> !Boolean.TRUE.equals(d.getEliminado()))
-                .mapToDouble(DetallePedido::getSubtotal).sum();
+        double total = pedido.getDetalles().stream().mapToDouble(DetallePedido::getSubtotal).sum();
         pedido.setTotal(total);
     }
 
@@ -492,8 +507,8 @@ public class PedidoService {
     }
 
     public PedidoResponseDTO toDTO(Pedido p) {
-        java.util.function.Function<DetallePedido, DetallePedidoResponseDTO> aDTO = d ->
-                DetallePedidoResponseDTO.builder()
+        List<DetallePedidoResponseDTO> detalles = p.getDetalles().stream()
+                .map(d -> DetallePedidoResponseDTO.builder()
                         .id(d.getId())
                         .cantidad(d.getCantidad())
                         .precioUnitario(d.getPrecioUnitario())
@@ -503,21 +518,7 @@ public class PedidoService {
                         // quedaron guardados en el detalle).
                         .variante(d.getVariante())
                         .producto(d.getProducto() != null ? productoService.toDTO(d.getProducto()) : null)
-                        .cantidadOriginal(d.getCantidadOriginal())
-                        .build();
-
-        // "detalles" son los productos activos del pedido (lo que se cobra,
-        // lo que se puede seguir editando). Los que se sacaron durante una
-        // edición (soft delete) van aparte en "detallesEliminados", solo para
-        // que Cocina los pueda mostrar tachados — en ningún otro lado de la
-        // app deben aparecer como si siguieran formando parte del pedido.
-        List<DetallePedidoResponseDTO> detalles = p.getDetalles().stream()
-                .filter(d -> !Boolean.TRUE.equals(d.getEliminado()))
-                .map(aDTO)
-                .collect(Collectors.toList());
-        List<DetallePedidoResponseDTO> detallesEliminados = p.getDetalles().stream()
-                .filter(d -> Boolean.TRUE.equals(d.getEliminado()))
-                .map(aDTO)
+                        .build())
                 .collect(Collectors.toList());
 
         return PedidoResponseDTO.builder()
@@ -534,11 +535,11 @@ public class PedidoService {
                 .horarioEntrega(p.getHorarioEntrega())
                 .mesa(p.getMesa())
                 .modificadoEn(p.getModificadoEn())
+                .detalleSnapshotAntesEdicion(p.getDetalleSnapshotAntesEdicion())
                 .metodoPagoPreferido(p.getMetodoPagoPreferido())
                 .cliente(p.getCliente() != null ? clienteService.toDTO(p.getCliente()) : null)
                 .usuario(p.getUsuario() != null ? usuarioService.toDTO(p.getUsuario()) : null)
                 .detalles(detalles)
-                .detallesEliminados(detallesEliminados)
                 .cancelable(esCancelable(p))
                 .build();
     }
