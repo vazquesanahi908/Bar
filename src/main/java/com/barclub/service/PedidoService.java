@@ -540,7 +540,6 @@ public class PedidoService {
                 .detalles(detalles)
                 .detallesEliminados(detallesEliminados)
                 .cancelable(esCancelable(p))
-                .estadoPagoOnline(p.getEstadoPagoOnline())
                 .build();
     }
 }

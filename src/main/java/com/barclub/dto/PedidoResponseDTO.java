@@ -42,6 +42,4 @@ public class PedidoResponseDTO {
     // "editar pedido", etc.) trabaja únicamente con "detalles".
     private List<DetallePedidoResponseDTO> detallesEliminados;
     private boolean cancelable;
-    // PENDIENTE / APROBADO / RECHAZADO / null (no usó pago online). Ver Pedido.
-    private String estadoPagoOnline;
 }
