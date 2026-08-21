@@ -37,5 +37,11 @@ public class PedidoResponseDTO {
     private ClienteResponseDTO cliente;
     private UsuarioResponseDTO usuario;
     private List<DetallePedidoResponseDTO> detalles;
+    // Productos que se sacaron del pedido después de creado (soft delete).
+    // Solo lo usa Cocina, para mostrarlos tachados; el resto de la app (total,
+    // "editar pedido", etc.) trabaja únicamente con "detalles".
+    private List<DetallePedidoResponseDTO> detallesEliminados;
     private boolean cancelable;
+    // PENDIENTE / APROBADO / RECHAZADO / null (no usó pago online). Ver Pedido.
+    private String estadoPagoOnline;
 }

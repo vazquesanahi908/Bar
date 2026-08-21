@@ -39,6 +39,27 @@ public class DetallePedido {
     @Column(length = 60)
     private String variante;
 
+    // Cantidad con la que se cargó este renglón la primera vez (al crear el
+    // pedido, o al agregarlo en una edición posterior). NUNCA se toca
+    // después, aunque cambiarCantidadDetalle actualice "cantidad". Sirve
+    // para que Cocina pueda mostrar de forma durable (sin depender de nada
+    // en memoria del navegador, ni de cuánto tiempo pase) qué productos son
+    // nuevos (cantidadOriginal = 0) o cambiaron de cantidad después de
+    // creado el pedido — reportado en QA: el resaltado se perdía al
+    // refrescar la pantalla de Cocina.
+    @Column
+    @Builder.Default
+    private Integer cantidadOriginal = 0;
+
+    // Soft delete: en vez de borrar la fila cuando se saca un producto de un
+    // pedido ya creado, se marca "eliminado" y se conserva. Así Cocina puede
+    // seguir mostrando qué se sacó (tachado) aunque recargue la pantalla,
+    // hasta que el pedido pase a LISTO. Se excluye del total y de la lista
+    // de productos "activos" del pedido en todos los demás lugares.
+    @Column
+    @Builder.Default
+    private Boolean eliminado = false;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "pedido_id", nullable = false)
     @ToString.Exclude

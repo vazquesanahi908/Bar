@@ -99,4 +99,24 @@ public class Pedido {
     // Costo de envío cobrado al cliente (0 en retiro y en el local). Se suma al total.
     @Column
     private Double costoEnvio;
+
+    // ---- Pago online (Mercado Pago) ----
+    // Opcional: solo se completa cuando el cliente elige "pagar ahora" desde
+    // la web pública en vez de pagar al recibir. mpPreferenceId se guarda al
+    // crear el link de pago; estadoPagoOnline y mpPaymentId se completan
+    // recién cuando Mercado Pago confirma el pago del lado del servidor (ver
+    // PagoOnlineController) — nunca se marca "APROBADO" solo porque el
+    // navegador del cliente volvió a una URL de éxito, eso se puede simular.
+    // No cambia el estado del pedido (PENDIENTE/PREPARACION/...): es
+    // información aparte de "¿ya llegó la plata?", para que el cajero no
+    // se la vuelva a cobrar al entregar.
+    @Column(length = 60)
+    private String mpPreferenceId;
+
+    @Column(length = 60)
+    private String mpPaymentId;
+
+    // PENDIENTE, APROBADO o RECHAZADO — null si este pedido no usa pago online.
+    @Column(length = 20)
+    private String estadoPagoOnline;
 }

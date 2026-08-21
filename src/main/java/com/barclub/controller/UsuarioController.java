@@ -15,6 +15,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -101,6 +102,20 @@ public class UsuarioController {
     public ResponseEntity<Map<String, String>> resetPassword(@RequestBody Map<String, String> body) {
         usuarioService.resetPasswordConClaveMaestra(
                 body.get("email"), body.get("claveMaestra"), body.get("nuevaPassword"));
+        return ResponseEntity.ok(Map.of("mensaje", "Contraseña actualizada"));
+    }
+
+    @PatchMapping("/me/password")
+    @Operation(summary = "Cambiar mi propia contraseña",
+               description = "El usuario ya logueado cambia su contraseña probando que conoce la actual. " +
+                       "No requiere la clave maestra: se usa sobre todo para salir de la contraseña de fábrica.")
+    @ApiResponse(responseCode = "200", description = "Contraseña actualizada")
+    @ApiResponse(responseCode = "400", description = "Contraseña actual incorrecta o nueva contraseña inválida",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    public ResponseEntity<Map<String, String>> cambiarMiPassword(
+            Authentication authentication, @RequestBody Map<String, String> body) {
+        String email = authentication != null ? String.valueOf(authentication.getPrincipal()) : null;
+        usuarioService.cambiarPasswordPropia(email, body.get("passwordActual"), body.get("passwordNueva"));
         return ResponseEntity.ok(Map.of("mensaje", "Contraseña actualizada"));
     }
 }

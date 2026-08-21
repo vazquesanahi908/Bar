@@ -38,7 +38,18 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET,  "/api/productos/categoria/**").permitAll()
                 .requestMatchers(HttpMethod.GET,  "/api/productos/buscar").permitAll()
                 .requestMatchers(HttpMethod.GET,  "/api/config").permitAll()
+                // Alias/CBU para transferencia manual: la web pública los
+                // necesita para mostrárselos al cliente que elige "Transferencia".
+                .requestMatchers(HttpMethod.GET,  "/api/cuentas-pago").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/pedidos").permitAll()
+                // Pago online (Mercado Pago) de un pedido: lo dispara el propio
+                // cliente desde la web pública, y el webhook lo llama Mercado
+                // Pago (no hay sesión de ningún lado en ninguno de los dos
+                // casos). Van ANTES de la regla general de "/api/pedidos/**"
+                // (más abajo) para que la pisen.
+                .requestMatchers(HttpMethod.GET,  "/api/pedidos/pago-online/estado").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/pedidos/*/pago-online").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/pedidos/pago-online/webhook").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/reservas").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/usuarios/login").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/usuarios/reset-password").permitAll()
@@ -46,18 +57,27 @@ public class SecurityConfig {
                 // sensibles, solo un aviso de "algo cambió" (ver RealtimeNotifier),
                 // así que no necesita requerir sesión para el handshake.
                 .requestMatchers("/ws/**").permitAll()
-                // Endpoint de solo prueba del canal en tiempo real (ver
-                // DevTestController) — no expone datos, solo reenvía una
-                // señal vacía. Se puede borrar junto con ese controller.
-                .requestMatchers("/api/dev/**").permitAll()
                 // Swagger: solo ADMIN (no exponer el mapa de la API al público)
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").hasRole("ADMIN")
 
+                // Cambiar la propia contraseña: cualquier usuario logueado (no
+                // solo ADMIN), porque cualquier rol puede haber quedado con la
+                // contraseña de fábrica. Va ANTES de la regla general de
+                // "/api/usuarios/**" (solo ADMIN) para que la pise.
+                .requestMatchers(HttpMethod.PATCH, "/api/usuarios/me/password").authenticated()
+
                 // ── SOLO ADMIN: administración del sistema ──────────────────
-                // Gestión de usuarios, configuración del local y backups.
+                // Gestión de usuarios, configuración del local, backups y
+                // puesta a punto de una instalación nueva para un cliente.
                 .requestMatchers("/api/usuarios/**").hasRole("ADMIN")
+                .requestMatchers("/api/setup/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.PUT,    "/api/config/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.POST,   "/api/config/**").hasRole("ADMIN")
+                // Cargar/editar/borrar alias de transferencia es información
+                // sensible de cobro: solo ADMIN (el GET de arriba sí es público).
+                .requestMatchers(HttpMethod.POST,   "/api/cuentas-pago/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PUT,    "/api/cuentas-pago/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/api/cuentas-pago/**").hasRole("ADMIN")
                 .requestMatchers("/api/backups/**").hasRole("ADMIN")
                 // Borrar ventas es destructivo: solo el dueño.
                 .requestMatchers(HttpMethod.DELETE, "/api/ventas/**").hasRole("ADMIN")

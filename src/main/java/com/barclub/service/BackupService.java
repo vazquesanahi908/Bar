@@ -24,7 +24,14 @@ import java.util.stream.Stream;
 
 /**
  * Backup automático de la base de datos con mysqldump.
- * - Corre solo todos los días (cron configurable, por defecto 04:30).
+ * - Corre solo (cron configurable, por defecto todas las horas en punto) en
+ *   vez de una sola vez al día — así, ante un corte de luz, una falla del
+ *   servidor o cualquier otro imprevisto, como mucho se pierde lo cargado
+ *   en la última hora en vez de hasta un día entero de pedidos y ventas.
+ * - Cada corrida se escribe primero a un archivo temporal y solo se renombra
+ *   al nombre final si el volcado terminó bien: un corte de luz a mitad de
+ *   un backup nunca deja un archivo a medio escribir mezclado con los buenos
+ *   (ver ejecutar() / limpiarSobrantes()).
  * - Guarda los archivos en la carpeta configurada y borra los más viejos
  *   que la retención (por defecto 14 días).
  * - También se puede disparar a mano desde el panel (POST /api/backups/ejecutar).
@@ -141,7 +148,10 @@ public class BackupService {
 
     private volatile String ultimoResultado = "Todavía no se hizo ningún backup en esta sesión.";
 
-    @Scheduled(cron = "${app.backup.cron:0 30 4 * * *}")
+    // Por defecto, cada hora en punto (antes: una sola vez al día a las 04:30).
+    // Se puede ajustar con app.backup.cron en application.properties si un
+    // local prefiere otra frecuencia.
+    @Scheduled(cron = "${app.backup.cron:0 0 * * * *}")
     public void backupProgramado() {
         if (!enabled) return;
         log.info("Iniciando backup programado de la base de datos...");
@@ -151,6 +161,7 @@ public class BackupService {
     public synchronized Map<String, Object> ejecutar() {
         Map<String, Object> r = new HashMap<>();
         Path destino = null;
+        Path tmp = null;
         Path errFile = null;
         try {
             Matcher m = Pattern.compile("jdbc:mysql://([^:/]+)(?::(\\d+))?/([^?]+)").matcher(dbUrl);
@@ -160,9 +171,17 @@ public class BackupService {
             String db = m.group(3);
 
             Files.createDirectories(Paths.get(dir));
+            // El sufijo de hora incluye segundos: con backups cada una hora (o más
+            // seguido) en vez de uno solo por día, dos corridas en el mismo minuto
+            // ya no se pisan el nombre entre sí.
             String nombre = "backup-" + db + "-"
-                    + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmm")) + ".sql";
+                    + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmmss")) + ".sql";
             destino = Paths.get(dir, nombre);
+            // mysqldump escribe primero a un archivo ".part": si hay un corte de luz
+            // (u otra falla) a mitad del volcado, lo que queda es ese ".part" —
+            // nunca un "backup-....sql" a medio escribir mezclado con los buenos.
+            // Recién se renombra al nombre final si termina bien y no quedó vacío.
+            tmp = Paths.get(dir, nombre + ".part");
             errFile = Paths.get(dir, nombre + ".err");
 
             String exe = resolverMysqldump();
@@ -180,7 +199,7 @@ public class BackupService {
             ProcessBuilder pb = new ProcessBuilder(cmd);
             // La contraseña va por variable de entorno: no queda visible en la lista de procesos
             pb.environment().put("MYSQL_PWD", dbPass);
-            pb.redirectOutput(destino.toFile());
+            pb.redirectOutput(tmp.toFile());
             pb.redirectError(errFile.toFile());
 
             Process p = pb.start();
@@ -198,8 +217,12 @@ public class BackupService {
                         : err));
             }
 
-            long kb = Files.size(destino) / 1024;
+            long kb = Files.size(tmp) / 1024;
             if (kb == 0) throw new IllegalStateException("el archivo de backup quedó vacío");
+
+            // Recién ahora, con el volcado ya completo y validado, pasa a ser un
+            // backup "de verdad" con su nombre final.
+            Files.move(tmp, destino, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
 
             limpiarViejos();
             String carpeta = Paths.get(dir).toAbsolutePath().toString();
@@ -215,12 +238,12 @@ public class BackupService {
             r.put("ok", false);
             r.put("error", "El backup fue interrumpido");
         } catch (Exception e) {
-            try { if (destino != null) Files.deleteIfExists(destino); } catch (Exception ignore) {}
             ultimoResultado = "Último backup: ERROR · " + e.getMessage();
             log.error("Backup falló: {}", e.getMessage());
             r.put("ok", false);
             r.put("error", e.getMessage());
         } finally {
+            try { if (tmp != null) Files.deleteIfExists(tmp); } catch (Exception ignore) {}
             try { if (errFile != null) Files.deleteIfExists(errFile); } catch (Exception ignore) {}
         }
         return r;
@@ -288,6 +311,28 @@ public class BackupService {
                       Files.delete(f);
                       log.info("Backup viejo eliminado: {}", f.getFileName());
                   } catch (Exception ignore) {}
+              });
+        } catch (Exception ignore) {}
+        limpiarSobrantes();
+    }
+
+    /** Sobrantes ".part"/".err" de una corrida que se cortó a la mitad (ej: un
+     *  corte de luz justo durante el volcado, o el proceso reiniciado). No son
+     *  backups válidos, así que no cuentan para la retención: se borran directo
+     *  si tienen más de un día, para no acumular basura en la carpeta. */
+    private void limpiarSobrantes() {
+        Instant limite = Instant.now().minus(1, ChronoUnit.DAYS);
+        try (Stream<Path> st = Files.list(Paths.get(dir))) {
+            st.filter(f -> {
+                  String n = f.getFileName().toString();
+                  return n.startsWith("backup-") && (n.endsWith(".part") || n.endsWith(".err"));
+              })
+              .filter(f -> {
+                  try { return Files.getLastModifiedTime(f).toInstant().isBefore(limite); }
+                  catch (Exception e) { return false; }
+              })
+              .forEach(f -> {
+                  try { Files.delete(f); } catch (Exception ignore) {}
               });
         } catch (Exception ignore) {}
     }

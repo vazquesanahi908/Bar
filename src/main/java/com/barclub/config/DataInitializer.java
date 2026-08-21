@@ -4,6 +4,7 @@ import com.barclub.entity.*;
 import com.barclub.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,6 +17,20 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 public class DataInitializer {
 
     private final PasswordEncoder passwordEncoder;
+
+    // Controla si se carga el menú y los clientes de ejemplo (empanadas,
+    // pizzas, etc.) además de los 4 usuarios de prueba. Por defecto queda en
+    // true para no cambiarle el comportamiento a instalaciones que ya existen
+    // (por ejemplo, una instancia de demo que se usa para mostrarle la app a
+    // clientes potenciales, con datos falsos a propósito). Para instalar una
+    // instancia nueva ya "limpia" para un cliente real, sin tener que borrar
+    // el menú de ejemplo a mano ni con el botón de Configuración, arrancá esa
+    // instalación con la variable de entorno CARGAR_MENU_EJEMPLO=false: los 4
+    // usuarios de prueba se siguen creando igual (hacen falta para poder
+    // entrar la primera vez), pero el sistema arranca sin productos ni
+    // clientes cargados, listo para cargar el menú real desde cero.
+    @Value("${app.datos-ejemplo.cargar-menu:true}")
+    private boolean cargarMenuEjemplo;
 
     @Bean
     public CommandLineRunner initData(
@@ -65,6 +80,12 @@ public class DataInitializer {
                         .rol(Rol.MOZO).build());
 
                 log.info("  ✓ Usuarios creados");
+
+                if (!cargarMenuEjemplo) {
+                    log.info("=== CARGAR_MENU_EJEMPLO=false: se omite el menú y los clientes de ejemplo. " +
+                            "Instalación arrancando limpia, lista para cargar el menú real. ===");
+                    return;
+                }
 
                 // ---- Clientes ----
                 clienteRepo.save(Cliente.builder()

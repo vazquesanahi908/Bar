@@ -16,7 +16,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -34,33 +36,85 @@ public class UsuarioService {
      * Restablece la contraseña de un usuario validando la clave maestra.
      * La clave se verifica ACÁ, en el servidor: nunca viaja al HTML del panel.
      */
-    // Protección contra fuerza bruta: máx. 5 claves incorrectas cada 10 minutos
+    // Protección contra fuerza bruta: máx. 5 intentos fallidos cada 10 minutos,
+    // pero contados POR CLAVE (por email, normalmente) y no en un solo contador
+    // global. Antes era un único contador compartido por todo el sistema: bastaba
+    // con que cualquiera fallara 5 veces (a propósito o no) para bloquear el login
+    // de TODO el personal durante 10 minutos, lo cual es en sí mismo un agujero
+    // (un ataque de denegación de servicio barato). Con un contador por clave,
+    // fallar el login de un usuario no afecta a los demás.
     private static final int MAX_INTENTOS = 5;
     private static final long VENTANA_MS = 10 * 60 * 1000L;
-    private int intentosFallidos = 0;
-    private long ventanaInicio = 0;
+    private static final int LIMITE_CLAVES_EN_MEMORIA = 5000;
 
-    private synchronized void controlarIntentos() {
-        long ahora = System.currentTimeMillis();
-        if (ahora - ventanaInicio > VENTANA_MS) { ventanaInicio = ahora; intentosFallidos = 0; }
-        if (intentosFallidos >= MAX_INTENTOS) {
-            throw new BusinessException("Demasiados intentos fallidos. Esperá unos minutos y volvé a intentar.");
+    private static class IntentosInfo {
+        int fallidos = 0;
+        long ventanaInicio = 0;
+    }
+
+    private final Map<String, IntentosInfo> intentosPorClave = new ConcurrentHashMap<>();
+
+    private void controlarIntentos(String clave) {
+        limpiarMapaSiCrecioDemasiado();
+        IntentosInfo info = intentosPorClave.computeIfAbsent(normalizarClave(clave), k -> new IntentosInfo());
+        synchronized (info) {
+            long ahora = System.currentTimeMillis();
+            if (ahora - info.ventanaInicio > VENTANA_MS) { info.ventanaInicio = ahora; info.fallidos = 0; }
+            if (info.fallidos >= MAX_INTENTOS) {
+                throw new BusinessException("Demasiados intentos fallidos. Esperá unos minutos y volvé a intentar.");
+            }
         }
     }
-    private synchronized void registrarFallo() { intentosFallidos++; }
-    private synchronized void limpiarIntentos() { intentosFallidos = 0; }
+
+    private void registrarFallo(String clave) {
+        IntentosInfo info = intentosPorClave.computeIfAbsent(normalizarClave(clave), k -> new IntentosInfo());
+        synchronized (info) {
+            if (info.fallidos == 0) info.ventanaInicio = System.currentTimeMillis();
+            info.fallidos++;
+        }
+    }
+
+    private void limpiarIntentos(String clave) {
+        IntentosInfo info = intentosPorClave.get(normalizarClave(clave));
+        if (info != null) { synchronized (info) { info.fallidos = 0; } }
+    }
+
+    private String normalizarClave(String clave) {
+        return clave == null ? "?" : clave.trim().toLowerCase();
+    }
+
+    // Salvaguarda simple: si alguien intenta agotar memoria mandando miles de
+    // emails distintos, se podan las entradas cuya ventana ya venció en vez de
+    // dejar crecer el mapa para siempre.
+    private void limpiarMapaSiCrecioDemasiado() {
+        if (intentosPorClave.size() > LIMITE_CLAVES_EN_MEMORIA) {
+            long ahora = System.currentTimeMillis();
+            intentosPorClave.entrySet().removeIf(e -> ahora - e.getValue().ventanaInicio > VENTANA_MS);
+        }
+    }
+
+    // Emails y contraseñas que carga DataInitializer al primer arranque, cuando
+    // la base está vacía. Se usan solo para detectar en el login si un usuario
+    // sigue con la contraseña de fábrica (ver login() más abajo) — no se
+    // guardan en ningún lado ni habilitan ningún acceso extra.
+    private static final Map<String, String> PASSWORDS_DE_FABRICA = Map.of(
+            "admin@miapp.com", "admin123",
+            "cajero@miapp.com", "cajero123",
+            "cocina@miapp.com", "cocina123",
+            "mozo@miapp.com", "mozo123"
+    );
 
     public void resetPasswordConClaveMaestra(String email, String claveMaestra, String nuevaPassword) {
-        controlarIntentos();
+        controlarIntentos("reset:" + email);
         // Comparación en tiempo constante para no filtrar información por timing
         boolean claveOk = claveMaestra != null && MessageDigest.isEqual(
                 claveMaestra.getBytes(StandardCharsets.UTF_8),
                 masterKey.getBytes(StandardCharsets.UTF_8));
         if (!claveOk) {
-            registrarFallo();
+            registrarFallo("reset:" + email);
             throw new BusinessException("Clave maestra incorrecta");
         }
-        limpiarIntentos();
+        limpiarIntentos("reset:" + email);
         if (email == null || email.isBlank()) {
             throw new BusinessException("Ingresá el email del usuario");
         }
@@ -70,6 +124,31 @@ public class UsuarioService {
         Usuario usuario = usuarioRepository.findByEmail(email.trim())
                 .orElseThrow(() -> new BusinessException("No existe un usuario con ese email"));
         usuario.setPassword(passwordEncoder.encode(nuevaPassword));
+        usuarioRepository.save(usuario);
+    }
+
+    /**
+     * Cambio de contraseña por el propio usuario ya logueado (no necesita la
+     * clave maestra: alcanza con probar que conoce su contraseña actual).
+     * Pensado sobre todo para el flujo de "estás usando la contraseña de
+     * fábrica, poné una tuya" que dispara el panel después del login.
+     */
+    public void cambiarPasswordPropia(String email, String passwordActual, String passwordNueva) {
+        if (email == null || email.isBlank()) {
+            throw new BusinessException("Sesión inválida");
+        }
+        controlarIntentos("cambio:" + email);
+        Usuario usuario = usuarioRepository.findByEmail(email.trim())
+                .orElseThrow(() -> new BusinessException("Usuario no encontrado"));
+        if (passwordActual == null || !passwordEncoder.matches(passwordActual, usuario.getPassword())) {
+            registrarFallo("cambio:" + email);
+            throw new BusinessException("La contraseña actual no es correcta");
+        }
+        limpiarIntentos("cambio:" + email);
+        if (passwordNueva == null || passwordNueva.length() < 6) {
+            throw new BusinessException("La contraseña nueva debe tener al menos 6 caracteres");
+        }
+        usuario.setPassword(passwordEncoder.encode(passwordNueva));
         usuarioRepository.save(usuario);
     }
 
@@ -143,12 +222,18 @@ public class UsuarioService {
     @Transactional(readOnly = true)
     public Optional<UsuarioResponseDTO> login(String email, String password) {
         if (email == null || password == null) return Optional.empty();
-        // Freno de fuerza bruta: mismo control de intentos que el reset de contraseña.
-        controlarIntentos();
+        // Freno de fuerza bruta, contado por email (ver comentario arriba de MAX_INTENTOS).
+        controlarIntentos(email);
         Optional<UsuarioResponseDTO> res = usuarioRepository.findByEmail(email.trim())
                 .filter(u -> passwordEncoder.matches(password, u.getPassword()))
-                .map(this::toDTO);
-        if (res.isPresent()) { limpiarIntentos(); } else { registrarFallo(); }
+                .map(u -> {
+                    UsuarioResponseDTO dto = toDTO(u);
+                    // ¿Sigue usando la contraseña de fábrica de este email? El panel
+                    // usa este flag para obligarlo a cambiarla antes de seguir.
+                    dto.setDebeCambiarPassword(password.equals(PASSWORDS_DE_FABRICA.get(u.getEmail())));
+                    return dto;
+                });
+        if (res.isPresent()) { limpiarIntentos(email); } else { registrarFallo(email); }
         return res;
     }
 
