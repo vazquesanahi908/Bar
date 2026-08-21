@@ -4,7 +4,14 @@ WORKDIR /app
 COPY pom.xml .
 RUN mvn -q dependency:go-offline
 COPY src ./src
-RUN mvn -q clean package -DskipTests
+# -Dmaven.test.skip=true (en vez de -DskipTests): esto salta también la
+# COMPILACIÓN de los tests, no solo su ejecución. Como el repo de GitHub
+# puede tener archivos de prueba viejos de funciones que ya no están (pasó
+# dos veces: PagoOnlineController y UsuarioServiceTest), con -DskipTests
+# esos tests igual se compilaban y rompían el build en producción aunque
+# nunca se fueran a correr. Así el build de producción no depende de que
+# el repo esté 100% prolijo en la carpeta de tests.
+RUN mvn -q clean package -Dmaven.test.skip=true
 
 # ---- Etapa 2: ejecutar ----
 FROM eclipse-temurin:21-jre
